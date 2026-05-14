@@ -1,0 +1,12 @@
+module.exports = {
+  root: true,
+  linters: {
+    '*.{js,jsx,ts,tsx}': [
+      'eslint --fix',
+      'prettier --write'
+    ],
+    '*.{json,md,yaml,yml}': [
+      'prettier --write'
+    ]
+  }
+};
