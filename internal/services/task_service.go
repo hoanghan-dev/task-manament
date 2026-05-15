@@ -1,8 +1,13 @@
 package services
 
 import (
+	"dev/task-management/internal/dto/request"
 	"dev/task-management/internal/entities"
+	"dev/task-management/internal/mapper"
 	"dev/task-management/internal/repositories"
+	"errors"
+
+	"github.com/google/uuid"
 )
 
 type TaskService struct {
@@ -15,11 +20,17 @@ func NewTaskService(repo repositories.TaskRepository) *TaskService {
 	}
 }
 
-func (s *TaskService) GetAllTask() []*entities.Task {
-	return s.taskRepository.FindAll()
+func (s *TaskService) GetAllTask() ([]*entities.Task, error) {
+	tasks := s.taskRepository.FindAll()
+
+	if len(tasks) == 0 {
+		return nil, errors.New("task not found")
+	}
+
+	return tasks, nil
 }
 
-func (s *TaskService) GetTask(id int) (*entities.Task, error) {
+func (s *TaskService) GetTask(id uuid.UUID) (*entities.Task, error) {
 	task, err := s.taskRepository.FindById(id)
 	if err != nil {
 		return nil, err
@@ -27,19 +38,28 @@ func (s *TaskService) GetTask(id int) (*entities.Task, error) {
 	return task, nil
 }
 
-func (s *TaskService) CreateTask(t entities.Task) *entities.Task {
-	return s.taskRepository.CreateTask(t)
-}
+func (s *TaskService) CreateTask(t *request.TaskRequest) (*entities.Task, error) {
+	id := uuid.New()
+	task := mapper.TaskRequestToEntity(id, t)
 
-func (s *TaskService) UpdateTask(id int, t *entities.Task) (*entities.Task, error) {
-	task, err := s.taskRepository.UpdateTask(id, t)
-	if err != nil {
-		return nil, err
+	if !task.StatusIsValid() {
+		return nil, errors.New("task status invalid.")
 	}
-	return task, nil
+
+	return s.taskRepository.CreateTask(task), nil
 }
 
-func (s *TaskService) DeleteTask(id int) error {
+func (s *TaskService) UpdateTask(id uuid.UUID, t *request.TaskRequest) error {
+	task := mapper.TaskRequestToEntity(id, t)
+
+	err := s.taskRepository.UpdateTask(id, task)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *TaskService) DeleteTask(id uuid.UUID) error {
 	err := s.taskRepository.DeleteTask(id)
 	if err != nil {
 		return err

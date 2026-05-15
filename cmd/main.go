@@ -10,9 +10,9 @@ import (
 
 func main() {
 	fmt.Println("App running.....")
-	repo := repositories.NewtaskRepository()
+	repo := repositories.NewTaskRepository()
 	service := services.NewTaskService(repo)
-	handler := handler.NewTaskHandler(*service)
+	handler := handler.NewTaskHandler(service)
 	r := router.SetupRouter(*handler)
 	r.Run(":8080")
 }

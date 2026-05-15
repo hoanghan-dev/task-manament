@@ -11,7 +11,7 @@ func SetupRouter(taskHandler handler.TaskHandler) *gin.Engine {
 
 	api := router.Group("api/") // khởi tạo prefix api
 
-	// GET mapping với api tasks/
+	// URL mapping với api tasks/
 	api.GET("/tasks", taskHandler.GetAllTask)
 	api.GET("/tasks/:id", taskHandler.GetTask)
 	api.POST("/tasks", taskHandler.CreateTask)
