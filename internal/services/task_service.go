@@ -26,7 +26,7 @@ func (s *TaskService) GetAllTask() ([]*entities.Task, error) {
 	if len(tasks) == 0 {
 		return nil, errors.New("task not found")
 	}
-
+	
 	return tasks, nil
 }
 

@@ -1,10 +1,12 @@
 package router
 
 import (
+	"dev/task-management/internal/db"
 	"dev/task-management/internal/handler"
 	"dev/task-management/internal/middleware"
 	"dev/task-management/internal/repositories"
 	"dev/task-management/internal/services"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,6 +22,7 @@ func SetupRouter() *gin.Engine {
 
 	SetupTaskRouter(api)
 	SetupAssessmentRouter(api)
+	SetupDatabase(api)
 	return router
 }
 
@@ -47,4 +50,14 @@ func SetupAssessmentRouter(api *gin.RouterGroup) {
 	assessments.POST("/", handler.CreateAssessment)
 	assessments.PUT("/:id", handler.UpdateAssessment)
 	assessments.DELETE("/:id", handler.DeleteAssessment)
+}
+
+func SetupDatabase(api *gin.RouterGroup) {
+	db := db.ConnectPostgres()
+	defer db.Close()
+	api.GET("/db", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "conected database postgres",
+		})
+	})
 }
