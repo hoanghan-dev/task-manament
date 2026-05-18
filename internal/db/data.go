@@ -148,3 +148,86 @@ var TaskDataMock = []*entities.Task{
 		Assignee:    "Kiet",
 	},
 }
+
+var AssessmentMockData = []*entities.Assessment{
+	{
+		Id:   uuid.New(),
+		Name: "Java Core Assessment",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "Spring Boot Fundamentals",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "REST API Design Test",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "Database Modeling Quiz",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "PostgreSQL Practice Test",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "Docker Basics Assessment",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "Git & GitHub Evaluation",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "Clean Architecture Review",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "Microservices Knowledge Test",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "JWT Authentication Quiz",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "Redis Caching Assessment",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "Linux Command Line Test",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "Go Language Syntax Quiz",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "Gin Framework Assessment",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "Concurrency in Go Test",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "Unit Testing Practice",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "System Design Fundamentals",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "OOP Concepts Evaluation",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "Data Structures Assessment",
+	},
+	{
+		Id:   uuid.New(),
+		Name: "Algorithm Problem Solving Test",
+	},
+}

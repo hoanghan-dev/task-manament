@@ -3,11 +3,11 @@ package entities
 import "github.com/google/uuid"
 
 type Task struct {
-	Id          uuid.UUID `json:"id" validate:"required"`
-	Title       string    `json:"title" validate:"required"`
-	Description string    `json:"description" validate:"required"`
-	Status      string    `json:"status" validate:"required"`
-	Assignee    string    `json:"assignee" validate:"required"`
+	Id          uuid.UUID
+	Title       string
+	Description string
+	Status      string
+	Assignee    string
 }
 
 func NewTask(id uuid.UUID, title string, description string, status string, assignee string) *Task {
