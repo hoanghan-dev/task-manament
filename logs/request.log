@@ -1,0 +1,10 @@
+[INFO] RequestID: 8491a0e4-1d30-4d3c-90fb-4750551bd455 - Method: GET - Path: /api/assessments/ - Status: 200 - latency: 0s 
+[INFO] RequestID: 27f3dc18-1e2e-49c1-8932-acd9897956da - Method: POST - Path: /api/assessments/ - Status: 201 - latency: 0s 
+[INFO] RequestID: a110dff2-e7fb-40e1-8dc6-7b770a187472 - Method: POST - Path: /api/assessments/ - Status: 201 - latency: 0s 
+[INFO] RequestID: f627e5a3-bdbd-4f78-8a42-fb17fbbd3fe2 - Method: POST - Path: /api/assessments/ - Status: 201 - latency: 0s 
+[INFO] RequestID: 7e83fdaf-8f3d-425a-bf9a-e652d4bccdfc - Method: POST - Path: /api/assessments/ - Status: 201 - latency: 0s 
+[INFO] RequestID: 809319d8-ae8b-495d-863b-cc4eb2055822 - Method: GET - Path: /api/tasks/ - Status: 200 - latency: 514.1µs 
+[INFO] RequestID: 39884009-a8a7-4350-b493-7fc2d0a3a158 - Method: GET - Path: /api/tasks/ - Status: 200 - latency: 1.0073ms 
+[INFO] RequestID: a0fd5534-5219-4f19-a7bf-8eccd5a49857 - Method: GET - Path: /api/tasks/ - Status: 200 - latency: 524.5µs 
+[INFO] RequestID: fbbeae90-3f75-424d-9986-ec1765ee62b7 - Method: GET - Path: /api/assessments/ - Status: 200 - latency: 0s 
+[INFO] RequestID: 2168132a-3c55-4754-b122-30a61d398749 - Method: GET - Path: /api/db - Status: 200 - latency: 0s 
