@@ -1,63 +1,48 @@
 package router
 
 import (
-	"dev/task-management/internal/db"
-	"dev/task-management/internal/handler"
 	"dev/task-management/internal/middleware"
-	"dev/task-management/internal/repositories"
-	"dev/task-management/internal/services"
-	"net/http"
+	authHandler "dev/task-management/internal/modules/auth/handler"
+	taskHandler "dev/task-management/internal/modules/task/handler"
 
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRouter() *gin.Engine {
-	router := gin.New()         // khởi tạo router
-	api := router.Group("api/") // khởi tạo prefix api
-	api.Use(
-		middleware.RequestIdMiddleware,
-		middleware.LoggingMiddleware,
-		gin.Recovery(),
-	)
-
-	SetupTaskRouter(api)
-	SetupAssessmentRouter(api)
-	SetupDatabase(api)
-	return router
+type RouterDependencies struct {
+	TaskHandler *taskHandler.TaskHandler
+	AuthHander  *authHandler.AuthHander
 }
 
-func SetupTaskRouter(api *gin.RouterGroup) {
-	repo := repositories.NewTaskRepository()
-	service := services.NewTaskService(repo)
-	taskHandler := handler.NewTaskHandler(service)
+func SetupRouter(deps RouterDependencies) *gin.Engine {
+	r := gin.New()
+
+	r.Use(middleware.LoggingMiddleware,
+		middleware.RequestIdMiddleware,
+		middleware.AuthMiddleware,
+		gin.Recovery())
+
+	api := r.Group("api/")
+	SetupTaskRouter(api, deps.TaskHandler)
+	SetupAuthRouter(api, deps.AuthHander)
+	return r
+}
+
+func SetupTaskRouter(api *gin.RouterGroup, taskHandler *taskHandler.TaskHandler) {
 	tasks := api.Group("tasks/")
 	// URL mapping với api tasks/
-	tasks.GET("/", taskHandler.GetAllTask)
-	tasks.GET("/:id", taskHandler.GetTask)
-	tasks.POST("/", taskHandler.CreateTask)
-	tasks.PUT("/:id", taskHandler.UpdateTask)
-	tasks.DELETE("/:id", taskHandler.DeleteTask)
+	{
+		tasks.GET("/", taskHandler.GetAllTask)
+		tasks.GET("/:id", taskHandler.GetTask)
+		tasks.POST("/", taskHandler.CreateTask)
+		tasks.PUT("/:id", taskHandler.UpdateTask)
+		tasks.DELETE("/:id", taskHandler.DeleteTask)
+	}
 }
 
-func SetupAssessmentRouter(api *gin.RouterGroup) {
-	repo := repositories.NewAssessmentRepository()
-	services := services.NewAssessmentService(repo)
-	handler := handler.NewAssessmentHandler(services)
-
-	assessments := api.Group("assessments/")
-	assessments.GET("/", handler.GetAssessmentList)
-	assessments.GET("/:id", handler.GetAssessment)
-	assessments.POST("/", handler.CreateAssessment)
-	assessments.PUT("/:id", handler.UpdateAssessment)
-	assessments.DELETE("/:id", handler.DeleteAssessment)
-}
-
-func SetupDatabase(api *gin.RouterGroup) {
-	db := db.ConnectPostgres()
-	defer db.Close()
-	api.GET("/db", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "conected database postgres",
-		})
-	})
+func SetupAuthRouter(api *gin.RouterGroup, authHander *authHandler.AuthHander) {
+	auth := api.Group("auth/")
+	{
+		auth.POST("/register", authHander.Register)
+		auth.POST("/login", authHander.Login)
+	}
 }
