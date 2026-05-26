@@ -3,13 +3,18 @@ services:
     image: postgres:16
     container_name: task-management-postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123456
-      POSTGRES_DB: task_management
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+  redis:
+    image: redis:8
+    container_name: task-management-redis
+    ports:
+      - "6379:6379"
 
 volumes:
   postgres_data:
