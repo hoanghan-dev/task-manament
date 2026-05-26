@@ -6,31 +6,42 @@ import (
 	"dev/task-management/internal/modules/task/dto/response"
 	"dev/task-management/internal/modules/task/mapper"
 	"dev/task-management/internal/modules/task/repositories"
+	"dev/task-management/internal/modules/workspace/services"
 	"errors"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-type TaskService struct {
-	taskRepository repositories.TaskRepository
+type TaskService interface {
+	GetAllTask(ctx context.Context, ownerId uuid.UUID) ([]response.TaskResponse, error)
+	GetTask(context context.Context, id uuid.UUID, ownerId uuid.UUID) (*response.TaskResponse, error)
+	CreateTask(ctx context.Context, t *request.TaskRequest, ownerId uuid.UUID) (*response.TaskResponse, error)
+	UpdateTask(ctx context.Context, id uuid.UUID, t *request.TaskRequest, ownerId uuid.UUID) error
+	DeleteTask(ctx context.Context, id uuid.UUID, ownerId uuid.UUID) error
 }
 
-func NewTaskService(repo repositories.TaskRepository) *TaskService {
-	return &TaskService{
-		taskRepository: repo,
+type taskService struct {
+	taskRepository   repositories.TaskRepository
+	workspaceService services.WorkspaceService
+}
+
+func NewTaskService(repo repositories.TaskRepository, workspaceService services.WorkspaceService) TaskService {
+	return &taskService{
+		taskRepository:   repo,
+		workspaceService: workspaceService,
 	}
 }
 
-func (s *TaskService) GetAllTask(ctx context.Context) ([]response.TaskResponse, error) {
-	tasks, err := s.taskRepository.FindAll(ctx)
+func (s *taskService) GetAllTask(ctx context.Context, ownerId uuid.UUID) ([]response.TaskResponse, error) {
+	tasks, err := s.taskRepository.FindAll(ctx, ownerId)
 
 	if err != nil {
 		return nil, err
 	}
 
 	if len(tasks) == 0 {
-		return nil, errors.New("task not found")
+		return nil, nil
 	}
 
 	taskRes := make([]response.TaskResponse, 0)
@@ -42,8 +53,8 @@ func (s *TaskService) GetAllTask(ctx context.Context) ([]response.TaskResponse, 
 	return taskRes, nil
 }
 
-func (s *TaskService) GetTask(context context.Context, id uuid.UUID) (*response.TaskResponse, error) {
-	task, err := s.taskRepository.FindById(context, id)
+func (s *taskService) GetTask(context context.Context, id uuid.UUID, ownerId uuid.UUID) (*response.TaskResponse, error) {
+	task, err := s.taskRepository.FindById(context, id, ownerId)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +62,18 @@ func (s *TaskService) GetTask(context context.Context, id uuid.UUID) (*response.
 	return taskRes, nil
 }
 
-func (s *TaskService) CreateTask(ctx context.Context, t *request.TaskRequest) (*response.TaskResponse, error) {
+func (s *taskService) CreateTask(ctx context.Context, t *request.TaskRequest, ownerId uuid.UUID) (*response.TaskResponse, error) {
+
+	ownered, err := s.workspaceService.IsWorkspaceOwnedBy(ctx, t.Workspace, ownerId)
+
+	if err != nil {
+		return nil, errors.New("workspace not found")
+	}
+
+	if !ownered {
+		return nil, errors.New("access denied")
+	}
+
 	id := uuid.New()
 	createAt := time.Now()
 	task := mapper.TaskRequestToEntity(id, t, createAt)
@@ -60,26 +82,26 @@ func (s *TaskService) CreateTask(ctx context.Context, t *request.TaskRequest) (*
 		return nil, errors.New("task status invalid.")
 	}
 
-	err := s.taskRepository.CreateTask(ctx, task)
+	createErr := s.taskRepository.CreateTask(ctx, task)
 
-	if err != nil {
+	if createErr != nil {
 		return nil, errors.New("Task creation failed.")
 	}
 
 	return mapper.EntityToTaskResponse(task), nil
 }
 
-func (s *TaskService) UpdateTask(ctx context.Context, id uuid.UUID, t *request.TaskRequest) error {
+func (s *taskService) UpdateTask(ctx context.Context, id uuid.UUID, t *request.TaskRequest, ownerId uuid.UUID) error {
 	task := mapper.TaskUpdateToEntity(t)
-	err := s.taskRepository.UpdateTask(ctx, id, task)
+	err := s.taskRepository.UpdateTask(ctx, id, task, ownerId)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *TaskService) DeleteTask(ctx context.Context, id uuid.UUID) error {
-	err := s.taskRepository.DeleteTask(ctx, id)
+func (s *taskService) DeleteTask(ctx context.Context, id uuid.UUID, ownerId uuid.UUID) error {
+	err := s.taskRepository.DeleteTask(ctx, id, ownerId)
 	if err != nil {
 		return err
 	}

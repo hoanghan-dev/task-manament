@@ -34,15 +34,14 @@ func VerifyAccessToken(tokenString string) (jwt.MapClaims, error) {
 	claims := jwt.MapClaims{}
 
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (interface{}, error) {
+		if t.Method != jwt.SigningMethodHS256 {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
 		return []byte(os.Getenv("SECRET_KEY")), nil
 	})
 
 	if err != nil {
 		return nil, err
-	}
-
-	if token.Method != jwt.SigningMethodHS256 {
-		return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 	}
 
 	if !token.Valid {

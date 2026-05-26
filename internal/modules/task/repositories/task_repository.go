@@ -9,11 +9,11 @@ import (
 )
 
 type TaskRepository interface {
-	FindAll(ctx context.Context) ([]entities.Task, error)
-	FindById(ctx context.Context, id uuid.UUID) (*entities.Task, error)
+	FindAll(ctx context.Context, ownerId uuid.UUID) ([]entities.Task, error)
+	FindById(ctx context.Context, id uuid.UUID, ownerId uuid.UUID) (*entities.Task, error)
 	CreateTask(ctx context.Context, t *entities.Task) error
-	UpdateTask(ctx context.Context, id uuid.UUID, task *entities.Task) error
-	DeleteTask(ctx context.Context, id uuid.UUID) error
+	UpdateTask(ctx context.Context, id uuid.UUID, task *entities.Task, ownerId uuid.UUID) error
+	DeleteTask(ctx context.Context, id uuid.UUID, ownerId uuid.UUID) error
 }
 
 type taskRepository struct {
@@ -26,16 +26,20 @@ func NewTaskRepository(db *sql.DB) TaskRepository {
 	}
 }
 
-func (r *taskRepository) FindAll(ctx context.Context) ([]entities.Task, error) {
+func (r *taskRepository) FindAll(ctx context.Context, ownerId uuid.UUID) ([]entities.Task, error) {
 
-	sql := `select task_id, title, description, status, assignee_id, workspace_id, create_at 
-			from tasks order by create_at desc`
+	sql := `select  t.task_id, t.title, t.description, t.status, t.assignee_id, t.workspace_id, t.create_at from tasks t
+			join workspaces wp on t.workspace_id = wp.workspace_id
+			where wp.owner_id = $1 or t.assignee_id = $2
+			order by t.create_at desc`
 
-	rows, err := r.database.QueryContext(ctx, sql)
+	rows, err := r.database.QueryContext(ctx, sql, ownerId, ownerId)
 
 	if err != nil {
 		return nil, err
 	}
+
+	defer rows.Close()
 
 	tasks := make([]entities.Task, 0)
 
@@ -62,12 +66,13 @@ func (r *taskRepository) FindAll(ctx context.Context) ([]entities.Task, error) {
 	return tasks, rows.Err()
 }
 
-func (r *taskRepository) FindById(ctx context.Context, id uuid.UUID) (*entities.Task, error) {
+func (r *taskRepository) FindById(ctx context.Context, id uuid.UUID, ownerId uuid.UUID) (*entities.Task, error) {
 
-	sql := `select task_id, title, description, status, assignee_id, workspace_id, create_at
-			from tasks where task_id = $1`
+	sql := `select t.task_id, t.title, t.description, t.status, t.assignee_id, t.workspace_id, t.create_at from tasks t
+			join workspaces wp on t.workspace_id = wp.workspace_id
+			where (t.task_id = $1) and (wp.owner_id = $2 or t.assignee_id = $3)`
 
-	row := r.database.QueryRowContext(ctx, sql, id)
+	row := r.database.QueryRowContext(ctx, sql, id, ownerId, ownerId)
 
 	var task entities.Task
 
@@ -104,24 +109,30 @@ func (r *taskRepository) CreateTask(ctx context.Context, t *entities.Task) error
 	return err
 }
 
-func (r *taskRepository) UpdateTask(ctx context.Context, id uuid.UUID, task *entities.Task) error {
+func (r *taskRepository) UpdateTask(ctx context.Context, id uuid.UUID, task *entities.Task, ownerId uuid.UUID) error {
 	sql := `update tasks 
-			set title = $1, description = $2, status = $3, assignee_id = $4, workspace_id = $5
-			where task_id = $6`
+        set title = $1, description = $2, status = $3, assignee_id = $4, workspace_id = $5
+        where task_id = $6 and workspace_id in (
+            select workspace_id from workspaces where owner_id = $7
+        )`
 	_, err := r.database.ExecContext(ctx, sql,
 		task.Title,
 		task.Description,
 		task.Status,
 		task.Assignee,
 		task.Workspace,
-		id)
+		id,
+		ownerId)
 	return err
 }
 
-func (r *taskRepository) DeleteTask(ctx context.Context, id uuid.UUID) error {
-	sql := `delete from tasks
-			where task_id = $1`
+func (r *taskRepository) DeleteTask(ctx context.Context, id uuid.UUID, ownerId uuid.UUID) error {
+	sql := `delete from tasks t
+			where t.task_id = $1 and exists (
+				select 1 from workspaces w 
+				where w.workspace_id = t.workspace_id and w.owner_id = $2
+			)`
 
-	_, err := r.database.ExecContext(ctx, sql, id)
+	_, err := r.database.ExecContext(ctx, sql, id, ownerId)
 	return err
 }

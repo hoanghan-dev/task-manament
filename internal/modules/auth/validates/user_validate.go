@@ -1,6 +1,10 @@
 package validates
 
-import "errors"
+import (
+	"context"
+	"dev/task-management/internal/modules/auth/repositories"
+	"errors"
+)
 
 var (
 	MIN int = 6
@@ -17,4 +21,15 @@ func PasswordIsValid(pass string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func EmailIsValid(email string, ctx context.Context, repo repositories.UserRepository) (bool, error) {
+	user, _ := repo.GetUserByEmail(ctx, email)
+
+	if user != nil {
+		return false, errors.New("Email already exists")
+	}
+
+	return true, nil
+
 }

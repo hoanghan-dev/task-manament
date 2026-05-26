@@ -7,6 +7,7 @@ import (
 	"dev/task-management/internal/modules/auth/mapper"
 	"dev/task-management/internal/modules/auth/repositories"
 	"dev/task-management/internal/modules/auth/validates"
+	wpService "dev/task-management/internal/modules/workspace/services"
 	"dev/task-management/pkg/utils"
 	"errors"
 
@@ -20,16 +21,25 @@ type AuthService interface {
 }
 
 type authService struct {
-	userRepo repositories.UserRepository
+	userRepo  repositories.UserRepository
+	wpService wpService.WorkspaceService
 }
 
-func NewAuthService(repo repositories.UserRepository) AuthService {
+func NewAuthService(repo repositories.UserRepository, wpService wpService.WorkspaceService) AuthService {
 	return &authService{
-		userRepo: repo,
+		userRepo:  repo,
+		wpService: wpService,
 	}
 }
 
 func (s *authService) Register(ctx context.Context, userDTO *request.RegisterUserRequestDTO) (*response.UserResponseDTO, error) {
+
+	emailValid, err := validates.EmailIsValid(userDTO.Email, ctx, s.userRepo)
+
+	if !emailValid {
+		return nil, err
+	}
+
 	passValid, err := validates.PasswordIsValid(userDTO.Password)
 
 	if !passValid {
@@ -51,13 +61,22 @@ func (s *authService) Register(ctx context.Context, userDTO *request.RegisterUse
 		return nil, errCreate
 	}
 
-	return mapper.EntityToUserResponse(user), nil
+	wpRes, err := s.wpService.CreateWorkspaceDefault(ctx, user.Id, user.FullName)
+
+	if err != nil {
+		return nil, err
+	}
+	return mapper.EntityToUserResponse(user, wpRes), nil
 }
 
 func (s *authService) Login(ctx context.Context, userDTO *request.LoginUserRequestDTO) (*response.UserAuthResponseDTO, error) {
 	user, err := s.userRepo.GetUserByEmail(ctx, userDTO.Email)
 	if err != nil {
 		return nil, err
+	}
+
+	if user == nil {
+		return nil, errors.New("User not found")
 	}
 
 	errPass := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(userDTO.Password))

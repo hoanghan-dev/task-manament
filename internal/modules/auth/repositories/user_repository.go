@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"dev/task-management/internal/modules/auth/entities"
+	"errors"
 )
 
 type UserRepository interface {
@@ -22,10 +23,10 @@ func NewUserRepository(db *sql.DB) UserRepository {
 }
 
 func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*entities.User, error) {
-	sql := `select user_id, email, password_hash, full_name, create_at
+	query := `select user_id, email, password_hash, full_name, create_at
 			from users where email = $1`
 
-	row := r.database.QueryRowContext(ctx, sql, email)
+	row := r.database.QueryRowContext(ctx, query, email)
 
 	var user entities.User
 
@@ -38,10 +39,13 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*ent
 	)
 
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errors.New("User not found")
+		}
 		return nil, err
 	}
 
-	return &user, row.Err()
+	return &user, nil
 }
 
 func (r *userRepository) CreateUser(ctx context.Context, user *entities.User) error {

@@ -15,12 +15,11 @@ func main() {
 		log.Fatalf("Connet database faild: %v \n", err)
 	}
 
+	defer database.Close()
+
 	appli := app.NewApp(database)
 
 	if err := appli.Router.Run(":8080"); err != nil {
 		log.Fatalf("failed to start server: %v \n", err)
 	}
-
-	defer database.Close()
-
 }

@@ -34,7 +34,7 @@ func (h *AuthHander) Register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, response.ResponseError("register account failed", err.Error()))
 		return
 	}
-	c.JSON(http.StatusBadRequest, response.ResponseSuccess("egister account successfully", res))
+	c.JSON(http.StatusCreated, response.ResponseSuccess("register account successfully", res))
 }
 
 func (h *AuthHander) Login(c *gin.Context) {
@@ -53,5 +53,5 @@ func (h *AuthHander) Login(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusBadRequest, response.ResponseSuccess("Authentication successfully", res))
+	c.JSON(http.StatusOK, response.ResponseSuccess("Authentication successfully", res))
 }

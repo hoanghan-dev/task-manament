@@ -1,19 +1,21 @@
 package response
 
 import (
+	"dev/task-management/internal/modules/workspace/dto"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 type UserResponseDTO struct {
-	Id       uuid.UUID `json:"user_id" binding:"required, email"`
-	Email    string    `json:"emai" binding:"required, email"`
-	FullName string    `json:"full_name" binding:"required"`
-	CreateAt time.Time `json:"create_at" binding:"required"`
+	Id        uuid.UUID                `json:"user_id"`
+	Email     string                   `json:"email"`
+	FullName  string                   `json:"full_name"`
+	Workspace dto.WorkspaceResponseDTO `json:"workspace"`
+	CreateAt  time.Time                `json:"create_at"`
 }
 
 type UserAuthResponseDTO struct {
-	AccessToken  string `json:"access_token" binding:"required"`
-	RefreshToken string `json:"refresh_token" binding:"required"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
 }

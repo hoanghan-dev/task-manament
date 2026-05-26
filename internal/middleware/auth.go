@@ -10,12 +10,6 @@ import (
 )
 
 func AuthMiddleware(c *gin.Context) {
-
-	if strings.HasPrefix(c.Request.URL.Path, "/api/auth") {
-		c.Next()
-		return
-	}
-
 	header := c.GetHeader("Authorization")
 	if header == "" {
 		c.JSON(http.StatusUnauthorized, response.ResponseError("Unauthorized", "missing authorization header"))

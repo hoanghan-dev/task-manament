@@ -4,6 +4,7 @@ import (
 	"dev/task-management/internal/modules/task/dto/request"
 	"dev/task-management/internal/modules/task/services"
 	"dev/task-management/pkg/response"
+	"dev/task-management/pkg/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -11,21 +12,35 @@ import (
 )
 
 type TaskHandler struct {
-	service *services.TaskService
+	service services.TaskService
 }
 
-func NewTaskHandler(s *services.TaskService) *TaskHandler {
+func NewTaskHandler(s services.TaskService) *TaskHandler {
 	return &TaskHandler{
 		service: s,
 	}
 }
 
 func (h *TaskHandler) GetAllTask(c *gin.Context) {
-	tasks, err := h.service.GetAllTask(c.Request.Context())
+
+	ownerId, err := utils.GetOwnerId(c)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ResponseError("Internal Server Error", err.Error()))
+		return
+	}
+
+	tasks, err := h.service.GetAllTask(c.Request.Context(), ownerId)
 	if err != nil {
 		c.JSON(http.StatusNotFound, response.ResponseError("get list task failed", err.Error()))
 		return
 	}
+
+	if tasks == nil {
+		c.JSON(http.StatusOK, response.ResponseSuccess("get list task successfully", nil))
+		return
+	}
+
 	c.JSON(200, response.ResponseSuccess("get list task successfully", tasks))
 }
 
@@ -36,7 +51,15 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, response.ResponseError("validation failed", err.Error()))
 		return
 	}
-	task, err1 := h.service.GetTask(c.Request.Context(), id)
+
+	ownerId, err := utils.GetOwnerId(c)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ResponseError("Internal Server Error", err.Error()))
+		return
+	}
+
+	task, err1 := h.service.GetTask(c.Request.Context(), id, ownerId)
 
 	if err1 != nil {
 		c.JSON(http.StatusNotFound, response.ResponseError("get task failed", err1.Error()))
@@ -55,7 +78,15 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, response.ResponseError("validation failed", err.Error()))
 		return
 	}
-	task, err := h.service.CreateTask(c.Request.Context(), taskReq)
+
+	ownerId, err := utils.GetOwnerId(c)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ResponseError("Internal Server Error", err.Error()))
+		return
+	}
+
+	task, err := h.service.CreateTask(c.Request.Context(), taskReq, ownerId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, response.ResponseError("error create task", err.Error()))
 		return
@@ -82,7 +113,15 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, response.ResponseError("validation failed", err.Error()))
 		return
 	}
-	err2 := h.service.UpdateTask(c.Request.Context(), id, taskReq)
+
+	ownerId, err := utils.GetOwnerId(c)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ResponseError("Internal Server Error", err.Error()))
+		return
+	}
+
+	err2 := h.service.UpdateTask(c.Request.Context(), id, taskReq, ownerId)
 
 	if err2 != nil {
 		c.JSON(http.StatusBadRequest, response.ResponseError("validation failed", err2.Error()))
@@ -100,7 +139,15 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, response.ResponseError("validation failed", err.Error()))
 		return
 	}
-	err2 := h.service.DeleteTask(c.Request.Context(), id)
+
+	ownerId, err := utils.GetOwnerId(c)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ResponseError("Internal Server Error", err.Error()))
+		return
+	}
+
+	err2 := h.service.DeleteTask(c.Request.Context(), id, ownerId)
 	if err2 != nil {
 		c.JSON(http.StatusNotFound, response.ResponseError("delete task failed", err2.Error()))
 		return

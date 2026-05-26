@@ -3,7 +3,7 @@ create table tasks(
     title Text not null,
     description Text not null,
     status varchar(50) not null default 'TODO',
-    assignee_id UUID not null,
+    assignee_id UUID  null,
     workspace_id UUID not null,
     create_at Timestamp not null,
     constraint task_status_contraint 
