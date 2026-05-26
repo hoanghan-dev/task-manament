@@ -17,7 +17,15 @@ func main() {
 
 	defer database.Close()
 
-	appli := app.NewApp(database)
+	redis, err := config.NewRedisClient()
+
+	if err != nil {
+		log.Printf("Connet redis faild: %v \n", err)
+	}
+
+	defer redis.Close()
+
+	appli := app.NewApp(database, redis)
 
 	if err := appli.Router.Run(":8080"); err != nil {
 		log.Fatalf("failed to start server: %v \n", err)

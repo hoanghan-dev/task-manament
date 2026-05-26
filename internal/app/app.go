@@ -12,22 +12,26 @@ import (
 	workspaceRepo "dev/task-management/internal/modules/workspace/repositories"
 	workspaceService "dev/task-management/internal/modules/workspace/services"
 	"dev/task-management/internal/router"
+	"dev/task-management/pkg/cache"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
 
 type App struct {
 	Router *gin.Engine
 }
 
-func NewApp(database *sql.DB) *App {
+func NewApp(database *sql.DB, redis *redis.Client) *App {
+
+	redisService := cache.NewRedisCacheService(redis)
 
 	workspaceRepo := workspaceRepo.NewWorkspaceRepository(database)
 	workspaceService := workspaceService.NewWorkspaceService(workspaceRepo)
 	workspaceHandler := workspaceHandler.NewWorkspaceHandler(workspaceService)
 
 	taskRepo := taskRepo.NewTaskRepository(database)
-	taskService := taskService.NewTaskService(taskRepo, workspaceService)
+	taskService := taskService.NewTaskService(taskRepo, workspaceService, redisService)
 	taskHandler := taskHandler.NewTaskHandler(taskService)
 
 	userRepo := userRepo.NewUserRepository(database)
