@@ -70,7 +70,7 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 }
 
 func (h *TaskHandler) CreateTask(c *gin.Context) {
-	var taskReq *request.TaskRequest
+	var taskReq *request.CreateTaskRequest
 
 	err := c.ShouldBindJSON(&taskReq)
 
@@ -96,7 +96,7 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 }
 
 func (h *TaskHandler) UpdateTask(c *gin.Context) {
-	var taskReq *request.TaskRequest
+	var taskReq *request.UpdateTaskRequest
 
 	err := c.ShouldBindJSON(&taskReq)
 
@@ -153,4 +153,32 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, response.ResponseSuccess("delete task successfully", nil))
+}
+
+func (h *TaskHandler) AssignTask(c *gin.Context) {
+
+	var taskReq request.AssignTaskRequest
+
+	err := c.ShouldBindJSON(&taskReq)
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ResponseError("validation failed", err.Error()))
+		return
+	}
+
+	ownerId, err := utils.GetOwnerId(c)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ResponseError("Internal Server Error", err.Error()))
+		return
+	}
+
+	err = h.service.AssignTask(c.Request.Context(), &taskReq, ownerId)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ResponseError("Internal Server Error", err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, response.ResponseSuccess("Assign task successfully", nil))
+
 }

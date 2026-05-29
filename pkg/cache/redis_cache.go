@@ -66,3 +66,24 @@ func (rs *RedisCacheService) Clear(pattern string) error {
 	}
 	return nil
 }
+
+func (rs *RedisCacheService) Push(ctx context.Context, queueKey string, value any) error {
+
+	data, err := json.Marshal(value)
+
+	if err != nil {
+		return err
+	}
+
+	return rs.redisClient.LPush(ctx, queueKey, data).Err()
+}
+
+func (rs *RedisCacheService) Pop(ctx context.Context, queueKey string, value any) error {
+	data, err := rs.redisClient.BRPop(ctx, 0, queueKey).Result()
+
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal([]byte(data[1]), value)
+}

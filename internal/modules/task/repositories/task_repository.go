@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"dev/task-management/internal/modules/task/entities"
+	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -14,6 +15,8 @@ type TaskRepository interface {
 	CreateTask(ctx context.Context, t *entities.Task) error
 	UpdateTask(ctx context.Context, id uuid.UUID, task *entities.Task, ownerId uuid.UUID) error
 	DeleteTask(ctx context.Context, id uuid.UUID, ownerId uuid.UUID) error
+	TaskIsExists(ctx context.Context, taskId uuid.UUID) bool
+	AssignTask(ctx context.Context, taskId uuid.UUID, assigneeId uuid.UUID) error
 }
 
 type taskRepository struct {
@@ -135,4 +138,39 @@ func (r *taskRepository) DeleteTask(ctx context.Context, id uuid.UUID, ownerId u
 
 	_, err := r.database.ExecContext(ctx, sql, id, ownerId)
 	return err
+}
+
+func (r *taskRepository) TaskIsExists(ctx context.Context, taskId uuid.UUID) bool {
+	sqlQuery := `select exists (select 1 from tasks where task_id = $1)`
+	var exists bool
+	result := r.database.QueryRowContext(ctx, sqlQuery, taskId)
+
+	err := result.Scan(&exists)
+
+	if err != nil {
+		return false
+	}
+
+	return exists
+}
+
+func (r *taskRepository) AssignTask(ctx context.Context, taskId uuid.UUID, assigneeId uuid.UUID) error {
+	sqlQuery := `update tasks set assignee_id = $1 where task_id = $2`
+
+	result, err := r.database.ExecContext(ctx, sqlQuery, assigneeId, taskId)
+
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("failed to assign task")
+	}
+	return nil
 }

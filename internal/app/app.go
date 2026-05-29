@@ -5,6 +5,8 @@ import (
 	authHander "dev/task-management/internal/modules/auth/handler"
 	userRepo "dev/task-management/internal/modules/auth/repositories"
 	authService "dev/task-management/internal/modules/auth/services"
+	notiRepo "dev/task-management/internal/modules/notification/repositories"
+	notiService "dev/task-management/internal/modules/notification/services"
 	taskHandler "dev/task-management/internal/modules/task/handler"
 	taskRepo "dev/task-management/internal/modules/task/repositories"
 	taskService "dev/task-management/internal/modules/task/services"
@@ -30,8 +32,11 @@ func NewApp(database *sql.DB, redis *redis.Client) *App {
 	workspaceService := workspaceService.NewWorkspaceService(workspaceRepo)
 	workspaceHandler := workspaceHandler.NewWorkspaceHandler(workspaceService)
 
+	notiRepo := notiRepo.NewNotificationRepository(database)
+	notiService := notiService.NewNotificationService(notiRepo)
+
 	taskRepo := taskRepo.NewTaskRepository(database)
-	taskService := taskService.NewTaskService(taskRepo, workspaceService, redisService)
+	taskService := taskService.NewTaskService(taskRepo, workspaceService, redisService, notiService)
 	taskHandler := taskHandler.NewTaskHandler(taskService)
 
 	userRepo := userRepo.NewUserRepository(database)
