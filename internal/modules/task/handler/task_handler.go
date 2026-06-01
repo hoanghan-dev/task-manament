@@ -182,3 +182,38 @@ func (h *TaskHandler) AssignTask(c *gin.Context) {
 	c.JSON(http.StatusOK, response.ResponseSuccess("Assign task successfully", nil))
 
 }
+
+func (h *TaskHandler) UpdateTaskStatus(c *gin.Context) {
+	var taskReq request.UpdateTaskStatusRequest
+
+	err := c.ShouldBindJSON(&taskReq)
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ResponseError("validation failed", err.Error()))
+		return
+	}
+
+	taskIdStr := c.Param("id")
+
+	taskId, err := uuid.Parse(taskIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, response.ResponseError("validation failed", err.Error()))
+		return
+	}
+
+	ownerId, err := utils.GetOwnerId(c)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ResponseError("Internal Server Error", err.Error()))
+		return
+	}
+
+	err = h.service.UpdateTaskStatus(c.Request.Context(), taskId, ownerId, &taskReq)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.ResponseError("Internal Server Error", err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, response.ResponseSuccess("Update task status successfully", nil))
+}

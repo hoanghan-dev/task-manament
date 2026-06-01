@@ -16,42 +16,52 @@ import (
 
 func main() {
 	fmt.Println("Worker running.....")
-	database, err := config.ConnectPostgres()
 
+	// Kết nối PostgreSQL để lưu thông báo vào database
+	database, err := config.ConnectPostgres()
 	if err != nil {
 		log.Fatalf("Connet database faild: %v \n", err)
 	}
-
 	defer database.Close()
 
+	// Kết nối Redis để đọc job từ queue và publish thông báo qua Pub/Sub
 	redis, err := config.NewRedisClient()
-
 	if err != nil {
 		log.Fatalf("Connet redis faild: %v \n", err)
 	}
-
 	defer redis.Close()
 
+	// Khởi tạo Redis cache service (dùng chung cho queue và pub/sub)
+	redisService := cache.NewRedisCacheService(redis)
+
+	// Khởi tạo notification repository và service
+	// Service sẽ PUBLISH event lên Redis Pub/Sub thay vì gửi WebSocket trực tiếp
+	// (vì Worker là process riêng, không có Hub WebSocket)
 	notiRepo := repositories.NewNotificationRepository(database)
-	notiService := services.NewNotificationService(notiRepo)
+	notiService := services.NewNotificationService(notiRepo, redisService)
 
-	ctx, canncel := context.WithCancel(context.Background())
+	// Tạo context để kiểm soát vòng đời của các worker goroutine
+	// Khi cancel() được gọi, tất cả worker sẽ dừng lại
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	defer canncel()
+	// Worker 1: Xử lý job "assign task" từ queue:notifications:assign
+	// Lưu thông báo vào DB và publish event lên Redis channel notify:assign:{userId}
+	go func() {
+		assignTaskWorker := worker.NewNotificationWorker(notiService, redisService)
+		assignTaskWorker.StartAssignTaskNotification(ctx)
+	}()
 
-	cache := cache.NewRedisCacheService(redis)
+	// Worker 2: Xử lý job "update status" từ queue:notifications:status
+	// Publish event lên Redis channel notify:status:{userId}
+	go func() {
+		updateStatusWorker := worker.NewNotificationWorker(notiService, redisService)
+		updateStatusWorker.StartUpdateStatusNotification(ctx)
+	}()
 
-	workerNumber := 4
-
-	for i := 1; i <= workerNumber; i++ {
-		worker := worker.NewNotificationWorker(notiService, cache)
-		go worker.StartCreateNotification(ctx)
-	}
-
-	// Giữ process sống, chờ Ctrl+C hoặc stop signal
+	// Giữ process sống, chờ tín hiệu dừng từ hệ thống (Ctrl+C hoặc kill)
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-
 	<-quit
 
 	log.Println("Shutting down notification worker...")

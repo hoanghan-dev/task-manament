@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	notifiService "dev/task-management/internal/modules/notification/services"
 	"dev/task-management/internal/modules/task/dto/request"
 	"dev/task-management/internal/modules/task/dto/response"
 	"dev/task-management/internal/modules/task/events"
@@ -24,23 +23,22 @@ type TaskService interface {
 	UpdateTask(ctx context.Context, id uuid.UUID, t *request.UpdateTaskRequest, ownerId uuid.UUID) error
 	DeleteTask(ctx context.Context, id uuid.UUID, ownerId uuid.UUID) error
 	AssignTask(ctx context.Context, assignTaskReq *request.AssignTaskRequest, ownerId uuid.UUID) error
+	UpdateTaskStatus(ctx context.Context, taskId uuid.UUID, ownerId uuid.UUID, taskReq *request.UpdateTaskStatusRequest) error
 }
 
 type taskService struct {
 	taskRepository   repositories.TaskRepository
 	workspaceService workspaceService.WorkspaceService
 	redisClient      *cache.RedisCacheService
-	notifiService    notifiService.NotificationService
 }
 
 func NewTaskService(repo repositories.TaskRepository,
 	workspaceService workspaceService.WorkspaceService,
-	client *cache.RedisCacheService, notifiService notifiService.NotificationService) TaskService {
+	client *cache.RedisCacheService) TaskService {
 	return &taskService{
 		taskRepository:   repo,
 		workspaceService: workspaceService,
 		redisClient:      client,
-		notifiService:    notifiService,
 	}
 }
 
@@ -170,6 +168,10 @@ func (s *taskService) DeleteTask(ctx context.Context, id uuid.UUID, ownerId uuid
 }
 
 func (s *taskService) AssignTask(ctx context.Context, assignTaskReq *request.AssignTaskRequest, ownerId uuid.UUID) error {
+	if !s.taskRepository.TaskExistsInWorkspace(ctx, assignTaskReq.TaskId, assignTaskReq.WorkspaceId) {
+		return errors.New("task id not exists in workspace")
+	}
+
 	exists := s.taskRepository.TaskIsExists(ctx, assignTaskReq.TaskId)
 
 	if !exists {
@@ -202,7 +204,7 @@ func (s *taskService) AssignTask(ctx context.Context, assignTaskReq *request.Ass
 	return nil
 }
 func (s *taskService) notifyAssignTask(senderId uuid.UUID, receiverId uuid.UUID, taskId uuid.UUID) {
-	queueKey := "queue:notifications"
+	queueKey := "queue:notifications:assign"
 
 	event := events.NewAssignTaskEvent(senderId, receiverId, taskId)
 
@@ -212,4 +214,80 @@ func (s *taskService) notifyAssignTask(senderId uuid.UUID, receiverId uuid.UUID,
 		fmt.Printf("[ERROR] publish task assigned event failed: %v\n", err)
 	}
 
+}
+
+func (s *taskService) UpdateTaskStatus(ctx context.Context, taskId uuid.UUID, ownerId uuid.UUID, taskReq *request.UpdateTaskStatusRequest) error {
+	if !s.taskRepository.TaskExistsInWorkspace(ctx, taskId, taskReq.WorkspaceId) {
+		return errors.New("task id not exists in workspace")
+	}
+
+	task, err := s.taskRepository.FindById(ctx, taskId, ownerId)
+
+	if err != nil {
+		return fmt.Errorf("Task not found with id: %v", taskId)
+	}
+
+	ownered, err := s.workspaceService.IsWorkspaceOwnedBy(ctx, taskReq.WorkspaceId, ownerId)
+
+	if err != nil {
+		return err
+	}
+
+	if !ownered {
+		return errors.New("access denied")
+	}
+
+	if !s.changeStatusIsValid(task.Status, taskReq.Status) {
+		return fmt.Errorf("can not change task status from %s to %s", task.Status, taskReq.Status)
+	}
+
+	err = s.taskRepository.UpdateTaskStatus(ctx, taskId, taskReq.Status)
+
+	if err != nil {
+		return err
+	}
+
+	s.notifyUpdateTaskStatus(taskId, ownerId)
+
+	errRedis := s.redisClient.Clear("tasks:*")
+
+	if errRedis != nil {
+		fmt.Printf("[ERROR] CLear redis task cache failed with error: %v\n", errRedis)
+	}
+	return nil
+}
+
+func (s *taskService) notifyUpdateTaskStatus(taskId uuid.UUID, ownerId uuid.UUID) {
+	queueKey := "queue:notifications:status"
+	cxt := context.Background()
+	task, err := s.taskRepository.FindById(cxt, taskId, ownerId)
+
+	if err != nil {
+		fmt.Printf("[ERROR] publish task update status event failed: %v\n", err)
+	}
+
+	event := events.NewUpdateTaskEvent(taskId, task.Description, task.Status, task.Assignee)
+
+	err = s.redisClient.Push(cxt, queueKey, event)
+
+	if err != nil {
+		fmt.Printf("[ERROR] publish task update status event failed: %v\n", err)
+	}
+
+}
+
+func (s *taskService) changeStatusIsValid(oldStatus string, newStatus string) bool {
+	if oldStatus == newStatus {
+		return false
+	}
+
+	if oldStatus == "DONE" {
+		return false
+	}
+
+	if newStatus == "TODO" {
+		return false
+	}
+
+	return true
 }

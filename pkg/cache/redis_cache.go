@@ -87,3 +87,17 @@ func (rs *RedisCacheService) Pop(ctx context.Context, queueKey string, value any
 
 	return json.Unmarshal([]byte(data[1]), value)
 }
+
+// Publish gửi message lên một Redis Pub/Sub channel
+func (rs *RedisCacheService) Publish(ctx context.Context, channel string, value any) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return rs.redisClient.Publish(ctx, channel, data).Err()
+}
+
+// Subscribe lắng nghe message từ một Redis Pub/Sub channel
+func (rs *RedisCacheService) Subscribe(ctx context.Context, channel string) *redis.PubSub {
+	return rs.redisClient.Subscribe(ctx, channel)
+}
