@@ -5,11 +5,14 @@ import (
 	"database/sql"
 	"dev/task-management/internal/modules/auth/entities"
 	"errors"
+
+	"github.com/google/uuid"
 )
 
 type UserRepository interface {
 	GetUserByEmail(ctx context.Context, email string) (*entities.User, error)
 	CreateUser(ctx context.Context, user *entities.User) error
+	UserIsExists(ctx context.Context, userId uuid.UUID) bool
 }
 
 type userRepository struct {
@@ -54,4 +57,20 @@ func (r *userRepository) CreateUser(ctx context.Context, user *entities.User) er
 
 	_, err := r.database.ExecContext(ctx, sql, user.Id, user.Email, user.Password, user.FullName, user.CreateAt)
 	return err
+}
+
+func (r *userRepository) UserIsExists(ctx context.Context, userId uuid.UUID) bool {
+	sqlQuery := `select exists (select 1 from users where user_id = $1)`
+
+	var exists bool
+
+	result := r.database.QueryRowContext(ctx, sqlQuery, userId)
+
+	err := result.Scan(&exists)
+
+	if err != nil {
+		return false
+	}
+
+	return exists
 }

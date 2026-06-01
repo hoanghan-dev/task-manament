@@ -40,6 +40,7 @@ func SetupTaskRouter(api *gin.RouterGroup, taskHandler *taskHandler.TaskHandler)
 		tasks.POST("/", taskHandler.CreateTask)
 		tasks.PUT("/:id", taskHandler.UpdateTask)
 		tasks.DELETE("/:id", taskHandler.DeleteTask)
+		tasks.PATCH("/assign", taskHandler.AssignTask)
 	}
 }
 

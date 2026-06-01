@@ -2,11 +2,13 @@ package services
 
 import (
 	"context"
+	notifiService "dev/task-management/internal/modules/notification/services"
 	"dev/task-management/internal/modules/task/dto/request"
 	"dev/task-management/internal/modules/task/dto/response"
+	"dev/task-management/internal/modules/task/events"
 	"dev/task-management/internal/modules/task/mapper"
 	"dev/task-management/internal/modules/task/repositories"
-	"dev/task-management/internal/modules/workspace/services"
+	workspaceService "dev/task-management/internal/modules/workspace/services"
 	"dev/task-management/pkg/cache"
 	"errors"
 	"fmt"
@@ -18,22 +20,27 @@ import (
 type TaskService interface {
 	GetAllTask(ctx context.Context, ownerId uuid.UUID) ([]*response.TaskResponse, error)
 	GetTask(context context.Context, id uuid.UUID, ownerId uuid.UUID) (*response.TaskResponse, error)
-	CreateTask(ctx context.Context, t *request.TaskRequest, ownerId uuid.UUID) (*response.TaskResponse, error)
-	UpdateTask(ctx context.Context, id uuid.UUID, t *request.TaskRequest, ownerId uuid.UUID) error
+	CreateTask(ctx context.Context, t *request.CreateTaskRequest, ownerId uuid.UUID) (*response.TaskResponse, error)
+	UpdateTask(ctx context.Context, id uuid.UUID, t *request.UpdateTaskRequest, ownerId uuid.UUID) error
 	DeleteTask(ctx context.Context, id uuid.UUID, ownerId uuid.UUID) error
+	AssignTask(ctx context.Context, assignTaskReq *request.AssignTaskRequest, ownerId uuid.UUID) error
 }
 
 type taskService struct {
 	taskRepository   repositories.TaskRepository
-	workspaceService services.WorkspaceService
+	workspaceService workspaceService.WorkspaceService
 	redisClient      *cache.RedisCacheService
+	notifiService    notifiService.NotificationService
 }
 
-func NewTaskService(repo repositories.TaskRepository, workspaceService services.WorkspaceService, client *cache.RedisCacheService) TaskService {
+func NewTaskService(repo repositories.TaskRepository,
+	workspaceService workspaceService.WorkspaceService,
+	client *cache.RedisCacheService, notifiService notifiService.NotificationService) TaskService {
 	return &taskService{
 		taskRepository:   repo,
 		workspaceService: workspaceService,
 		redisClient:      client,
+		notifiService:    notifiService,
 	}
 }
 
@@ -98,7 +105,7 @@ func (s *taskService) GetTask(context context.Context, id uuid.UUID, ownerId uui
 	return taskRes, nil
 }
 
-func (s *taskService) CreateTask(ctx context.Context, t *request.TaskRequest, ownerId uuid.UUID) (*response.TaskResponse, error) {
+func (s *taskService) CreateTask(ctx context.Context, t *request.CreateTaskRequest, ownerId uuid.UUID) (*response.TaskResponse, error) {
 
 	ownered, err := s.workspaceService.IsWorkspaceOwnedBy(ctx, t.Workspace, ownerId)
 
@@ -133,7 +140,7 @@ func (s *taskService) CreateTask(ctx context.Context, t *request.TaskRequest, ow
 	return mapper.EntityToTaskResponse(task), nil
 }
 
-func (s *taskService) UpdateTask(ctx context.Context, id uuid.UUID, t *request.TaskRequest, ownerId uuid.UUID) error {
+func (s *taskService) UpdateTask(ctx context.Context, id uuid.UUID, t *request.UpdateTaskRequest, ownerId uuid.UUID) error {
 	task := mapper.TaskUpdateToEntity(t)
 	err := s.taskRepository.UpdateTask(ctx, id, task, ownerId)
 	if err != nil {
@@ -160,4 +167,49 @@ func (s *taskService) DeleteTask(ctx context.Context, id uuid.UUID, ownerId uuid
 		fmt.Printf("[ERROR] CLear redis task cache failed with error: %v\n", errRedis)
 	}
 	return nil
+}
+
+func (s *taskService) AssignTask(ctx context.Context, assignTaskReq *request.AssignTaskRequest, ownerId uuid.UUID) error {
+	exists := s.taskRepository.TaskIsExists(ctx, assignTaskReq.TaskId)
+
+	if !exists {
+		return fmt.Errorf("Task not found with id: %v", assignTaskReq.TaskId)
+	}
+
+	ownered, err := s.workspaceService.IsWorkspaceOwnedBy(ctx, assignTaskReq.WorkspaceId, ownerId)
+
+	if err != nil {
+		return err
+	}
+
+	if !ownered {
+		return errors.New("access denied")
+	}
+
+	errAssign := s.taskRepository.AssignTask(ctx, assignTaskReq.TaskId, assignTaskReq.AssigneeId)
+
+	if errAssign != nil {
+		return errAssign
+	}
+
+	go s.notifyAssignTask(ownerId, assignTaskReq.AssigneeId, assignTaskReq.TaskId)
+
+	errRedis := s.redisClient.Clear("tasks:*")
+
+	if errRedis != nil {
+		fmt.Printf("[ERROR] CLear redis task cache failed with error: %v\n", errRedis)
+	}
+	return nil
+}
+func (s *taskService) notifyAssignTask(senderId uuid.UUID, receiverId uuid.UUID, taskId uuid.UUID) {
+	queueKey := "queue:notifications"
+
+	event := events.NewAssignTaskEvent(senderId, receiverId, taskId)
+
+	err := s.redisClient.Push(context.Background(), queueKey, event)
+
+	if err != nil {
+		fmt.Printf("[ERROR] publish task assigned event failed: %v\n", err)
+	}
+
 }
