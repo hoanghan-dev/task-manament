@@ -17,6 +17,8 @@ type TaskRepository interface {
 	DeleteTask(ctx context.Context, id uuid.UUID, ownerId uuid.UUID) error
 	TaskIsExists(ctx context.Context, taskId uuid.UUID) bool
 	AssignTask(ctx context.Context, taskId uuid.UUID, assigneeId uuid.UUID) error
+	UpdateTaskStatus(ctx context.Context, taskId uuid.UUID, status string) error
+	TaskExistsInWorkspace(ctx context.Context, taskId uuid.UUID, workspaceId uuid.UUID) bool
 }
 
 type taskRepository struct {
@@ -114,15 +116,14 @@ func (r *taskRepository) CreateTask(ctx context.Context, t *entities.Task) error
 
 func (r *taskRepository) UpdateTask(ctx context.Context, id uuid.UUID, task *entities.Task, ownerId uuid.UUID) error {
 	sql := `update tasks 
-        set title = $1, description = $2, status = $3, assignee_id = $4, workspace_id = $5
-        where task_id = $6 and workspace_id in (
-            select workspace_id from workspaces where owner_id = $7
+        set title = $1, description = $2, status = $3, workspace_id = $4
+        where task_id = $5 and workspace_id in (
+            select workspace_id from workspaces where owner_id = $6
         )`
 	_, err := r.database.ExecContext(ctx, sql,
 		task.Title,
 		task.Description,
 		task.Status,
-		task.Assignee,
 		task.Workspace,
 		id,
 		ownerId)
@@ -154,10 +155,45 @@ func (r *taskRepository) TaskIsExists(ctx context.Context, taskId uuid.UUID) boo
 	return exists
 }
 
-func (r *taskRepository) AssignTask(ctx context.Context, taskId uuid.UUID, assigneeId uuid.UUID) error {
-	sqlQuery := `update tasks set assignee_id = $1 where task_id = $2`
+func (r *taskRepository) TaskExistsInWorkspace(ctx context.Context, taskId uuid.UUID, workspaceId uuid.UUID) bool {
+	sqlQuery := `select exists (select 1 from tasks where task_id = $1 and workspace_id = $2)`
+	var exists bool
+	result := r.database.QueryRowContext(ctx, sqlQuery, taskId, workspaceId)
 
-	result, err := r.database.ExecContext(ctx, sqlQuery, assigneeId, taskId)
+	err := result.Scan(&exists)
+
+	if err != nil {
+		return false
+	}
+
+	return exists
+}
+
+func (r *taskRepository) AssignTask(ctx context.Context, taskId uuid.UUID, assigneeId uuid.UUID) error {
+	sqlQuery := `update tasks set assignee_id = $1 where task_id = $2 and assignee_id != $3`
+
+	result, err := r.database.ExecContext(ctx, sqlQuery, assigneeId, taskId, assigneeId)
+
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("failed to assign task")
+	}
+	return nil
+}
+
+func (r *taskRepository) UpdateTaskStatus(ctx context.Context, taskId uuid.UUID, status string) error {
+	sqlQuery := `update tasks set status = $1 where task_id = $2`
+
+	result, err := r.database.ExecContext(ctx, sqlQuery, status, taskId)
 
 	if err != nil {
 		return err

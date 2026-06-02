@@ -5,6 +5,7 @@ import (
 	authHandler "dev/task-management/internal/modules/auth/handler"
 	taskHandler "dev/task-management/internal/modules/task/handler"
 	workspaceHandler "dev/task-management/internal/modules/workspace/handler"
+	"dev/task-management/internal/realtime"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,6 +14,7 @@ type RouterDependencies struct {
 	TaskHandler      *taskHandler.TaskHandler
 	AuthHander       *authHandler.AuthHander
 	WorkspaceHandler *workspaceHandler.WorkspaceHandler
+	WSHandler        *realtime.WSHandler
 }
 
 func SetupRouter(deps RouterDependencies) *gin.Engine {
@@ -28,6 +30,7 @@ func SetupRouter(deps RouterDependencies) *gin.Engine {
 	protected := api.Group("", middleware.AuthMiddleware)
 	SetupTaskRouter(protected, deps.TaskHandler)
 	SetupWorkspaceRouter(protected, deps.WorkspaceHandler)
+	SetupWSRouter(protected, deps.WSHandler)
 	return r
 }
 
@@ -41,6 +44,7 @@ func SetupTaskRouter(api *gin.RouterGroup, taskHandler *taskHandler.TaskHandler)
 		tasks.PUT("/:id", taskHandler.UpdateTask)
 		tasks.DELETE("/:id", taskHandler.DeleteTask)
 		tasks.PATCH("/assign", taskHandler.AssignTask)
+		tasks.PATCH("/:id/status", taskHandler.UpdateTaskStatus)
 	}
 }
 
@@ -58,5 +62,12 @@ func SetupWorkspaceRouter(api *gin.RouterGroup, workspaceHandler *workspaceHandl
 		workspace.GET("/", workspaceHandler.GetWorkspace)
 		workspace.PUT("/", workspaceHandler.UpdateWorkspace)
 		workspace.DELETE("/:wpId", workspaceHandler.DeleteWorkspace)
+	}
+}
+
+func SetupWSRouter(api *gin.RouterGroup, wsHandler *realtime.WSHandler) {
+	ws := api.Group("ws/")
+	{
+		ws.GET("/", wsHandler.Connect)
 	}
 }
