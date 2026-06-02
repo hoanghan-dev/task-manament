@@ -3,6 +3,7 @@ package router
 import (
 	"dev/task-management/internal/middleware"
 	authHandler "dev/task-management/internal/modules/auth/handler"
+	commentHandler "dev/task-management/internal/modules/comment/handler"
 	taskHandler "dev/task-management/internal/modules/task/handler"
 	workspaceHandler "dev/task-management/internal/modules/workspace/handler"
 	"dev/task-management/internal/realtime"
@@ -14,6 +15,7 @@ type RouterDependencies struct {
 	TaskHandler      *taskHandler.TaskHandler
 	AuthHander       *authHandler.AuthHander
 	WorkspaceHandler *workspaceHandler.WorkspaceHandler
+	CommentHandler   *commentHandler.CommentHandler
 	WSHandler        *realtime.WSHandler
 }
 
@@ -30,6 +32,7 @@ func SetupRouter(deps RouterDependencies) *gin.Engine {
 	protected := api.Group("", middleware.AuthMiddleware)
 	SetupTaskRouter(protected, deps.TaskHandler)
 	SetupWorkspaceRouter(protected, deps.WorkspaceHandler)
+	SetupCommentRouter(protected, deps.CommentHandler)
 	SetupWSRouter(protected, deps.WSHandler)
 	return r
 }
@@ -62,6 +65,19 @@ func SetupWorkspaceRouter(api *gin.RouterGroup, workspaceHandler *workspaceHandl
 		workspace.GET("/", workspaceHandler.GetWorkspace)
 		workspace.PUT("/", workspaceHandler.UpdateWorkspace)
 		workspace.DELETE("/:wpId", workspaceHandler.DeleteWorkspace)
+	}
+}
+
+func SetupCommentRouter(api *gin.RouterGroup, handler *commentHandler.CommentHandler) {
+	tasks := api.Group("tasks/")
+	{
+		tasks.POST("/:id/comments", handler.CreateComment)
+		tasks.GET("/:id/comments", handler.GetComments)
+	}
+
+	comments := api.Group("comments/")
+	{
+		comments.DELETE("/:commentId", handler.DeleteComment)
 	}
 }
 

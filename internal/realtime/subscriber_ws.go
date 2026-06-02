@@ -81,3 +81,31 @@ func (s *NotificationSubscriber) SubscribeUpdateStatusForUser(ctx context.Contex
 		}
 	}
 }
+
+func (s *NotificationSubscriber) SubscribeCommentForUser(ctx context.Context, userId uuid.UUID) {
+	channel := fmt.Sprintf("notify:comment:%s", userId.String())
+	pubsub := s.redisClient.Subscribe(ctx, channel)
+	defer pubsub.Close()
+
+	log.Printf("Subscribed to Redis channel: %s\n", channel)
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("Unsubscribed from Redis channel: %s\n", channel)
+			return
+		case msg, ok := <-pubsub.Channel():
+			if !ok {
+				return
+			}
+			var event Event
+			if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
+				log.Println("Failed to unmarshal comment event:", err)
+				continue
+			}
+			if err := s.hub.SendEventToUser(userId, &event); err != nil {
+				log.Println("Failed to send comment event to WS user:", err)
+			}
+		}
+	}
+}
