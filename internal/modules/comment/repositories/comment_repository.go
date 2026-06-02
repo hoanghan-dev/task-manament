@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"dev/task-management/internal/modules/comment/entities"
+	"dev/task-management/pkg/apperror"
 
 	"github.com/google/uuid"
 )
@@ -39,7 +40,11 @@ func (r *commentRepository) Create(ctx context.Context, comment *entities.Commen
 		comment.Content,
 		comment.CreateAt,
 	)
-	return err
+
+	if err != nil {
+		return apperror.WrapDBError(err, "comment")
+	}
+	return nil
 }
 
 func (r *commentRepository) FindByTaskId(ctx context.Context, taskId uuid.UUID) ([]entities.Comment, error) {
@@ -50,7 +55,7 @@ func (r *commentRepository) FindByTaskId(ctx context.Context, taskId uuid.UUID) 
 
 	rows, err := r.database.QueryContext(ctx, sqlQuery, taskId)
 	if err != nil {
-		return nil, err
+		return nil, apperror.WrapDBError(err, "comment")
 	}
 	defer rows.Close()
 
@@ -69,7 +74,7 @@ func (r *commentRepository) FindByTaskId(ctx context.Context, taskId uuid.UUID) 
 		)
 
 		if err != nil {
-			return nil, err
+			return nil, apperror.WrapDBError(err, "comment")
 		}
 
 		comments = append(comments, comment)
@@ -97,7 +102,7 @@ func (r *commentRepository) FindById(ctx context.Context, commentId uuid.UUID) (
 	)
 
 	if err != nil {
-		return nil, err
+		return nil, apperror.WrapDBError(err, "comment")
 	}
 
 	return &comment, nil
@@ -108,16 +113,16 @@ func (r *commentRepository) Delete(ctx context.Context, commentId uuid.UUID) err
 
 	result, err := r.database.ExecContext(ctx, sqlQuery, commentId)
 	if err != nil {
-		return err
+		return apperror.WrapDBError(err, "comment")
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return apperror.Wrap(err, apperror.NewInternal("database error"))
 	}
 
 	if rowsAffected == 0 {
-		return sql.ErrNoRows
+		return apperror.NewNotFound("comment")
 	}
 
 	return nil
@@ -129,7 +134,7 @@ func (r *commentRepository) TaskExists(ctx context.Context, taskId uuid.UUID) (b
 	var exists bool
 	err := r.database.QueryRowContext(ctx, sqlQuery, taskId).Scan(&exists)
 	if err != nil {
-		return false, err
+		return false, apperror.WrapDBError(err, "task")
 	}
 
 	return exists, nil
@@ -147,7 +152,7 @@ func (r *commentRepository) CanUserAccessTask(ctx context.Context, taskId uuid.U
 	var canAccess bool
 	err := r.database.QueryRowContext(ctx, sqlQuery, taskId, userId, userId).Scan(&canAccess)
 	if err != nil {
-		return false, err
+		return false, apperror.WrapDBError(err, "task")
 	}
 
 	return canAccess, nil
@@ -166,7 +171,7 @@ func (r *commentRepository) FindCommentReceiversByTaskId(ctx context.Context, ta
 
 	rows, err := r.database.QueryContext(ctx, sqlQuery, taskId, taskId)
 	if err != nil {
-		return nil, err
+		return nil, apperror.WrapDBError(err, "comment")
 	}
 	defer rows.Close()
 
@@ -176,7 +181,7 @@ func (r *commentRepository) FindCommentReceiversByTaskId(ctx context.Context, ta
 		var userId uuid.UUID
 		err := rows.Scan(&userId)
 		if err != nil {
-			return nil, err
+			return nil, apperror.WrapDBError(err, "comment")
 		}
 		userIds = append(userIds, userId)
 	}

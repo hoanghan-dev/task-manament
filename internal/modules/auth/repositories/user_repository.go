@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"dev/task-management/internal/modules/auth/entities"
-	"errors"
+	"dev/task-management/pkg/apperror"
 
 	"github.com/google/uuid"
 )
@@ -42,21 +42,22 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*ent
 	)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, errors.New("User not found")
-		}
-		return nil, err
+		return nil, apperror.WrapDBError(err, "user")
 	}
 
 	return &user, nil
 }
 
 func (r *userRepository) CreateUser(ctx context.Context, user *entities.User) error {
-	sql := `insert into users (user_id, email, password_hash, full_name, create_at)
+	sqlStr := `insert into users (user_id, email, password_hash, full_name, create_at)
 			values ($1, $2, $3, $4, $5)`
 
-	_, err := r.database.ExecContext(ctx, sql, user.Id, user.Email, user.Password, user.FullName, user.CreateAt)
-	return err
+	_, err := r.database.ExecContext(ctx, sqlStr, user.Id, user.Email, user.Password, user.FullName, user.CreateAt)
+
+	if err != nil {
+		return apperror.WrapDBError(err, "user")
+	}
+	return nil
 }
 
 func (r *userRepository) UserIsExists(ctx context.Context, userId uuid.UUID) bool {

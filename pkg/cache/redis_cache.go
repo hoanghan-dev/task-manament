@@ -24,7 +24,7 @@ func (rs *RedisCacheService) Set(key string, value any, ttl time.Duration) error
 	data, err := json.Marshal(value)
 
 	if err != nil {
-		return nil
+		return err
 	}
 	return rs.redisClient.Set(rs.ctx, key, data, ttl*time.Minute).Err()
 }

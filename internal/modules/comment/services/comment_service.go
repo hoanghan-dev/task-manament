@@ -9,8 +9,8 @@ import (
 	"dev/task-management/internal/modules/comment/mapper"
 	"dev/task-management/internal/modules/comment/repositories"
 	"dev/task-management/internal/realtime"
+	"dev/task-management/pkg/apperror"
 	"dev/task-management/pkg/cache"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -40,25 +40,25 @@ func (s *commentService) CreateComment(ctx context.Context, taskId uuid.UUID, us
 	// Validate content
 	content := strings.TrimSpace(req.Content)
 	if content == "" {
-		return nil, errors.New("comment content cannot be empty")
+		return nil, apperror.NewValidation("comment content cannot be empty")
 	}
 
 	// Check task exists
 	exists, err := s.commentRepo.TaskExists(ctx, taskId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check task existence: %v", err)
+		return nil, err // AppError from repository
 	}
 	if !exists {
-		return nil, errors.New("task not found")
+		return nil, apperror.NewNotFound("task")
 	}
 
 	// Check user has access to the task
 	canAccess, err := s.commentRepo.CanUserAccessTask(ctx, taskId, userId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check user access: %v", err)
+		return nil, err // AppError from repository
 	}
 	if !canAccess {
-		return nil, errors.New("access denied")
+		return nil, apperror.NewForbidden("you don't have permission to comment on this task")
 	}
 
 	// Create comment entity
@@ -69,7 +69,7 @@ func (s *commentService) CreateComment(ctx context.Context, taskId uuid.UUID, us
 	// Save to DB
 	err = s.commentRepo.Create(ctx, comment)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create comment: %v", err)
+		return nil, err // AppError from repository
 	}
 
 	// Send WebSocket event asynchronously (don't rollback comment on WS failure)
@@ -82,25 +82,25 @@ func (s *commentService) GetCommentsByTaskId(ctx context.Context, taskId uuid.UU
 	// Check task exists
 	exists, err := s.commentRepo.TaskExists(ctx, taskId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check task existence: %v", err)
+		return nil, err // AppError from repository
 	}
 	if !exists {
-		return nil, errors.New("task not found")
+		return nil, apperror.NewNotFound("task")
 	}
 
 	// Check user has access to the task
 	canAccess, err := s.commentRepo.CanUserAccessTask(ctx, taskId, userId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check user access: %v", err)
+		return nil, err // AppError from repository
 	}
 	if !canAccess {
-		return nil, errors.New("access denied")
+		return nil, apperror.NewForbidden("you don't have permission to view comments on this task")
 	}
 
 	// Fetch comments
 	comments, err := s.commentRepo.FindByTaskId(ctx, taskId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get comments: %v", err)
+		return nil, err // AppError from repository
 	}
 
 	commentRes := make([]*response.CommentResponse, 0)
@@ -112,28 +112,27 @@ func (s *commentService) GetCommentsByTaskId(ctx context.Context, taskId uuid.UU
 }
 
 func (s *commentService) DeleteComment(ctx context.Context, commentId uuid.UUID, userId uuid.UUID) error {
-	// Check comment exists
+	// Check comment exists - repository returns AppError(NotFound) or AppError(Internal)
 	comment, err := s.commentRepo.FindById(ctx, commentId)
 	if err != nil {
-		return errors.New("comment not found")
+		return err // AppError: 404 if not found, 500 if DB error
 	}
 
 	// Check permission: user is comment creator OR workspace owner
 	if comment.UserId != userId {
-		// Check if user is workspace owner of the task
 		canAccess, err := s.commentRepo.CanUserAccessTask(ctx, comment.TaskId, userId)
 		if err != nil {
-			return fmt.Errorf("failed to check user access: %v", err)
+			return err // AppError from repository
 		}
 		if !canAccess {
-			return errors.New("access denied")
+			return apperror.NewForbidden("you don't have permission to delete this comment")
 		}
 	}
 
 	// Delete from DB
 	err = s.commentRepo.Delete(ctx, commentId)
 	if err != nil {
-		return fmt.Errorf("failed to delete comment: %v", err)
+		return err // AppError from repository
 	}
 
 	// Send WebSocket event asynchronously

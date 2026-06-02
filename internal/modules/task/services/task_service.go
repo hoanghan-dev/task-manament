@@ -8,8 +8,8 @@ import (
 	"dev/task-management/internal/modules/task/mapper"
 	"dev/task-management/internal/modules/task/repositories"
 	workspaceService "dev/task-management/internal/modules/workspace/services"
+	"dev/task-management/pkg/apperror"
 	"dev/task-management/pkg/cache"
-	"errors"
 	"fmt"
 	"time"
 
@@ -51,7 +51,6 @@ func (s *taskService) GetAllTask(ctx context.Context, ownerId uuid.UUID) ([]*res
 	err := s.redisClient.Get(redisKey, &tasksCache)
 
 	if err == nil {
-		fmt.Printf("[ERROR] Failed to get data in redis with error: %v\n", err)
 		fmt.Println("[INFO] Jump into cache")
 		return tasksCache, nil
 	}
@@ -59,7 +58,7 @@ func (s *taskService) GetAllTask(ctx context.Context, ownerId uuid.UUID) ([]*res
 	tasks, err := s.taskRepository.FindAll(ctx, ownerId)
 
 	if err != nil {
-		return nil, err
+		return nil, err // AppError from repository
 	}
 
 	if len(tasks) == 0 {
@@ -81,7 +80,7 @@ func (s *taskService) GetAllTask(ctx context.Context, ownerId uuid.UUID) ([]*res
 	return taskRes, nil
 }
 
-func (s *taskService) GetTask(context context.Context, id uuid.UUID, ownerId uuid.UUID) (*response.TaskResponse, error) {
+func (s *taskService) GetTask(ctx context.Context, id uuid.UUID, ownerId uuid.UUID) (*response.TaskResponse, error) {
 
 	redisKey := "tasks:owner_id:" + ownerId.String() + ":task_id:" + id.String()
 
@@ -93,13 +92,19 @@ func (s *taskService) GetTask(context context.Context, id uuid.UUID, ownerId uui
 		return taskCache, nil
 	}
 
-	task, err := s.taskRepository.FindById(context, id, ownerId)
+	task, err := s.taskRepository.FindById(ctx, id, ownerId)
 	if err != nil {
-		fmt.Printf("[ERROR] Set task into cache failed with error: %v\n", err)
+		// Repository returns AppError (NotFound or Internal) → propagate
+		return nil, err
 	}
+
 	taskRes := mapper.EntityToTaskResponse(task)
 
-	s.redisClient.Set(redisKey, taskRes, 10)
+	// Cache set failure is non-critical → just log
+	if cacheErr := s.redisClient.Set(redisKey, taskRes, 10); cacheErr != nil {
+		fmt.Printf("[WARN] Failed to cache task: %v\n", cacheErr)
+	}
+
 	return taskRes, nil
 }
 
@@ -108,11 +113,11 @@ func (s *taskService) CreateTask(ctx context.Context, t *request.CreateTaskReque
 	ownered, err := s.workspaceService.IsWorkspaceOwnedBy(ctx, t.Workspace, ownerId)
 
 	if err != nil {
-		return nil, errors.New("workspace not found")
+		return nil, err // AppError from workspace service
 	}
 
 	if !ownered {
-		return nil, errors.New("access denied")
+		return nil, apperror.NewForbidden("you don't have permission to create task in this workspace")
 	}
 
 	id := uuid.New()
@@ -120,19 +125,19 @@ func (s *taskService) CreateTask(ctx context.Context, t *request.CreateTaskReque
 	task := mapper.TaskRequestToEntity(id, t, createAt)
 
 	if !task.StatusIsValid() {
-		return nil, errors.New("task status invalid.")
+		return nil, apperror.NewValidation("task status invalid, must be one of: TODO, IN_PROGRESS, DONE, BLOCKED")
 	}
 
 	createErr := s.taskRepository.CreateTask(ctx, task)
 
 	if createErr != nil {
-		return nil, errors.New("Task creation failed.")
+		return nil, createErr // AppError from repository
 	}
 
 	errRedis := s.redisClient.Clear("tasks:*")
 
 	if errRedis != nil {
-		fmt.Printf("[ERROR] CLear redis task cache failed with error: %v\n", errRedis)
+		fmt.Printf("[ERROR] Clear redis task cache failed with error: %v\n", errRedis)
 	}
 
 	return mapper.EntityToTaskResponse(task), nil
@@ -142,13 +147,13 @@ func (s *taskService) UpdateTask(ctx context.Context, id uuid.UUID, t *request.U
 	task := mapper.TaskUpdateToEntity(t)
 	err := s.taskRepository.UpdateTask(ctx, id, task, ownerId)
 	if err != nil {
-		return err
+		return err // AppError from repository (NotFound or Internal)
 	}
 
 	errRedis := s.redisClient.Clear("tasks:*")
 
 	if errRedis != nil {
-		fmt.Printf("[ERROR] CLear redis task cache failed with error: %v\n", errRedis)
+		fmt.Printf("[ERROR] Clear redis task cache failed with error: %v\n", errRedis)
 	}
 	return nil
 }
@@ -156,42 +161,42 @@ func (s *taskService) UpdateTask(ctx context.Context, id uuid.UUID, t *request.U
 func (s *taskService) DeleteTask(ctx context.Context, id uuid.UUID, ownerId uuid.UUID) error {
 	err := s.taskRepository.DeleteTask(ctx, id, ownerId)
 	if err != nil {
-		return err
+		return err // AppError from repository (NotFound or Internal)
 	}
 
 	errRedis := s.redisClient.Clear("tasks:*")
 
 	if errRedis != nil {
-		fmt.Printf("[ERROR] CLear redis task cache failed with error: %v\n", errRedis)
+		fmt.Printf("[ERROR] Clear redis task cache failed with error: %v\n", errRedis)
 	}
 	return nil
 }
 
 func (s *taskService) AssignTask(ctx context.Context, assignTaskReq *request.AssignTaskRequest, ownerId uuid.UUID) error {
 	if !s.taskRepository.TaskExistsInWorkspace(ctx, assignTaskReq.TaskId, assignTaskReq.WorkspaceId) {
-		return errors.New("task id not exists in workspace")
+		return apperror.NewNotFound("task in workspace")
 	}
 
 	exists := s.taskRepository.TaskIsExists(ctx, assignTaskReq.TaskId)
 
 	if !exists {
-		return fmt.Errorf("Task not found with id: %v", assignTaskReq.TaskId)
+		return apperror.NewNotFound("task")
 	}
 
 	ownered, err := s.workspaceService.IsWorkspaceOwnedBy(ctx, assignTaskReq.WorkspaceId, ownerId)
 
 	if err != nil {
-		return err
+		return err // AppError from workspace service
 	}
 
 	if !ownered {
-		return errors.New("access denied")
+		return apperror.NewForbidden("you don't have permission to assign tasks in this workspace")
 	}
 
 	errAssign := s.taskRepository.AssignTask(ctx, assignTaskReq.TaskId, assignTaskReq.AssigneeId)
 
 	if errAssign != nil {
-		return errAssign
+		return errAssign // AppError from repository (Conflict or Internal)
 	}
 
 	go s.notifyAssignTask(ownerId, assignTaskReq.AssigneeId, assignTaskReq.TaskId)
@@ -199,7 +204,7 @@ func (s *taskService) AssignTask(ctx context.Context, assignTaskReq *request.Ass
 	errRedis := s.redisClient.Clear("tasks:*")
 
 	if errRedis != nil {
-		fmt.Printf("[ERROR] CLear redis task cache failed with error: %v\n", errRedis)
+		fmt.Printf("[ERROR] Clear redis task cache failed with error: %v\n", errRedis)
 	}
 	return nil
 }
@@ -218,33 +223,33 @@ func (s *taskService) notifyAssignTask(senderId uuid.UUID, receiverId uuid.UUID,
 
 func (s *taskService) UpdateTaskStatus(ctx context.Context, taskId uuid.UUID, ownerId uuid.UUID, taskReq *request.UpdateTaskStatusRequest) error {
 	if !s.taskRepository.TaskExistsInWorkspace(ctx, taskId, taskReq.WorkspaceId) {
-		return errors.New("task id not exists in workspace")
+		return apperror.NewNotFound("task in workspace")
 	}
 
 	task, err := s.taskRepository.FindById(ctx, taskId, ownerId)
 
 	if err != nil {
-		return fmt.Errorf("Task not found with id: %v", taskId)
+		return err // AppError from repository (NotFound or Internal)
 	}
 
 	ownered, err := s.workspaceService.IsWorkspaceOwnedBy(ctx, taskReq.WorkspaceId, ownerId)
 
 	if err != nil {
-		return err
+		return err // AppError from workspace service
 	}
 
 	if !ownered {
-		return errors.New("access denied")
+		return apperror.NewForbidden("you don't have permission to update task status in this workspace")
 	}
 
 	if !s.changeStatusIsValid(task.Status, taskReq.Status) {
-		return fmt.Errorf("can not change task status from %s to %s", task.Status, taskReq.Status)
+		return apperror.NewBadRequest(fmt.Sprintf("cannot change task status from %s to %s", task.Status, taskReq.Status))
 	}
 
 	err = s.taskRepository.UpdateTaskStatus(ctx, taskId, taskReq.Status)
 
 	if err != nil {
-		return err
+		return err // AppError from repository
 	}
 
 	s.notifyUpdateTaskStatus(taskId, ownerId)
@@ -252,7 +257,7 @@ func (s *taskService) UpdateTaskStatus(ctx context.Context, taskId uuid.UUID, ow
 	errRedis := s.redisClient.Clear("tasks:*")
 
 	if errRedis != nil {
-		fmt.Printf("[ERROR] CLear redis task cache failed with error: %v\n", errRedis)
+		fmt.Printf("[ERROR] Clear redis task cache failed with error: %v\n", errRedis)
 	}
 	return nil
 }
@@ -264,6 +269,7 @@ func (s *taskService) notifyUpdateTaskStatus(taskId uuid.UUID, ownerId uuid.UUID
 
 	if err != nil {
 		fmt.Printf("[ERROR] publish task update status event failed: %v\n", err)
+		return
 	}
 
 	event := events.NewUpdateTaskEvent(taskId, task.Description, task.Status, task.Assignee)

@@ -33,7 +33,7 @@ func (s *workspaceService) GetWorkspace(ctx context.Context, ownerId uuid.UUID) 
 	wp, err := s.repo.FindByOwnerId(ctx, ownerId)
 
 	if err != nil {
-		return nil, err
+		return nil, err // AppError from repository (NotFound or Internal)
 	}
 
 	return mapper.EntityToWorkspaceResponse(wp), nil
@@ -47,7 +47,7 @@ func (s *workspaceService) CreateWorkspaceDefault(ctx context.Context, ownerId u
 	wpCreated, err := s.repo.Create(ctx, workspace)
 
 	if err != nil {
-		return nil, err
+		return nil, err // AppError from repository
 	}
 
 	return mapper.EntityToWorkspaceResponse(wpCreated), nil
@@ -59,7 +59,7 @@ func (s *workspaceService) UpdateWorkspace(
 	err := s.repo.Update(ctx, workspace, workspace.WorkspaceId, ownerId)
 
 	if err != nil {
-		return err
+		return err // AppError from repository (NotFound or Internal)
 	}
 
 	return nil
@@ -68,7 +68,7 @@ func (s *workspaceService) DeteleWorkspace(ctx context.Context, wpId uuid.UUID, 
 	err := s.repo.Delete(ctx, wpId, ownerId)
 
 	if err != nil {
-		return err
+		return err // AppError from repository (NotFound or Internal)
 	}
 
 	return nil

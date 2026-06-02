@@ -3,6 +3,7 @@ package handler
 import (
 	"dev/task-management/internal/modules/auth/dto/request"
 	"dev/task-management/internal/modules/auth/services"
+	"dev/task-management/pkg/apperror"
 	"dev/task-management/pkg/response"
 	"net/http"
 
@@ -22,36 +23,35 @@ func NewAuthHandler(authS services.AuthService) *AuthHander {
 func (h *AuthHander) Register(c *gin.Context) {
 	var userReq request.RegisterUserRequestDTO
 
-	err := c.ShouldBindJSON(&userReq)
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, response.ResponseError("validation failed", err.Error()))
+	if err := c.ShouldBindJSON(&userReq); err != nil {
+		apperror.HandleError(c, apperror.NewValidation(err.Error()))
 		return
 	}
 
 	res, err := h.authService.Register(c.Request.Context(), &userReq)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, response.ResponseError("register account failed", err.Error()))
+		// 400 Validation / 409 Conflict (duplicate email) / 500 Internal
+		apperror.HandleError(c, err)
 		return
 	}
+
 	c.JSON(http.StatusCreated, response.ResponseSuccess("register account successfully", res))
 }
 
 func (h *AuthHander) Login(c *gin.Context) {
 	var userLogin request.LoginUserRequestDTO
-	err := c.ShouldBindJSON(&userLogin)
 
-	if err != nil {
-		c.JSON(http.StatusBadRequest, response.ResponseError("request format invalid", err.Error()))
+	if err := c.ShouldBindJSON(&userLogin); err != nil {
+		apperror.HandleError(c, apperror.NewValidation(err.Error()))
 		return
 	}
 
 	res, err := h.authService.Login(c.Request.Context(), &userLogin)
-
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, response.ResponseError("Authentication faild", err.Error()))
+		// 401 Unauthorized / 500 Internal
+		apperror.HandleError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, response.ResponseSuccess("Authentication successfully", res))
+	c.JSON(http.StatusOK, response.ResponseSuccess("authentication successfully", res))
 }
