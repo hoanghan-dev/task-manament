@@ -5,6 +5,9 @@ import (
 	authHander "dev/task-management/internal/modules/auth/handler"
 	userRepo "dev/task-management/internal/modules/auth/repositories"
 	authService "dev/task-management/internal/modules/auth/services"
+	commentHandler "dev/task-management/internal/modules/comment/handler"
+	commentRepo "dev/task-management/internal/modules/comment/repositories"
+	commentService "dev/task-management/internal/modules/comment/services"
 	taskHandler "dev/task-management/internal/modules/task/handler"
 	taskRepo "dev/task-management/internal/modules/task/repositories"
 	taskService "dev/task-management/internal/modules/task/services"
@@ -45,10 +48,15 @@ func NewApp(database *sql.DB, redis *redis.Client) *App {
 	authService := authService.NewAuthService(userRepo, workspaceService)
 	authHander := authHander.NewAuthHandler(authService)
 
+	commentRepo := commentRepo.NewCommentRepository(database)
+	commentService := commentService.NewCommentService(commentRepo, redisService)
+	commentHandler := commentHandler.NewCommentHandler(commentService)
+
 	r := router.SetupRouter(router.RouterDependencies{
 		TaskHandler:      taskHandler,
 		AuthHander:       authHander,
 		WorkspaceHandler: workspaceHandler,
+		CommentHandler:   commentHandler,
 		WSHandler:        wsHandler,
 	})
 

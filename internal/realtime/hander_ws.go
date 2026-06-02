@@ -52,6 +52,8 @@ func (h *WSHandler) Connect(c *gin.Context) {
 
 	go h.subscriber.SubscribeUpdateStatusForUser(ctx, userId)
 
+	go h.subscriber.SubscribeCommentForUser(ctx, userId)
+
 	go client.WriteLoop()
 
 	// ReadLoop block cho đến khi client disconnect
