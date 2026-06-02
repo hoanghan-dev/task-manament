@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"dev/task-management/internal/modules/notification/entities"
-	"errors"
+	"dev/task-management/pkg/apperror"
 
 	"github.com/google/uuid"
 )
@@ -29,7 +29,7 @@ func (r *notificationRepository) FindReceivedNotifications(ctx context.Context, 
 				from notifications where receiver_id = $1`
 	rows, err := r.db.QueryContext(ctx, sqlQuery, receiverId)
 	if err != nil {
-		return nil, err
+		return nil, apperror.WrapDBError(err, "notification")
 	}
 
 	defer rows.Close()
@@ -46,7 +46,7 @@ func (r *notificationRepository) FindReceivedNotifications(ctx context.Context, 
 			&notification.Message,
 			&notification.CreateAt)
 		if err != nil {
-			return nil, err
+			return nil, apperror.WrapDBError(err, "notification")
 		}
 
 		notifications = append(notifications, &notification)
@@ -61,17 +61,17 @@ func (r *notificationRepository) SaveNotification(ctx context.Context, noti *ent
 
 	result, err := r.db.ExecContext(ctx, sqlQuery, noti.NotificationId, noti.SenderId, noti.ReceiverId, noti.TaskId, noti.Message, noti.CreateAt)
 	if err != nil {
-		return err
+		return apperror.WrapDBError(err, "notification")
 	}
 
 	numOfRow, err := result.RowsAffected()
 
 	if err != nil {
-		return err
+		return apperror.Wrap(err, apperror.NewInternal("database error"))
 	}
 
 	if numOfRow == 0 {
-		return errors.New("faild to save notification")
+		return apperror.NewInternal("failed to save notification")
 	}
 
 	return nil

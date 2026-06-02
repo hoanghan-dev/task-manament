@@ -2,7 +2,7 @@ package realtime
 
 import (
 	"context"
-	"dev/task-management/pkg/response"
+	"dev/task-management/pkg/apperror"
 	"dev/task-management/pkg/utils"
 	"net/http"
 
@@ -31,7 +31,7 @@ var upgrader = websocket.Upgrader{
 func (h *WSHandler) Connect(c *gin.Context) {
 	userId, err := utils.GetOwnerId(c)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, response.ResponseError("Internal Server Error", err.Error()))
+		apperror.HandleError(c, err) // 401 Unauthorized (was 500)
 		return
 	}
 
@@ -44,10 +44,10 @@ func (h *WSHandler) Connect(c *gin.Context) {
 
 	h.hub.AddClient(client, userId)
 
-	// Tạo context gắn với vòng đời kết nối WS của user này
+	// Create a context tied to this WebSocket connection's lifecycle
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Khi client kết nối, bắt đầu lắng nghe Redis channel `notify:{userId}`
+	// Start listening to Redis channels for this user
 	go h.subscriber.SubscribeAssignTaskForUser(ctx, userId)
 
 	go h.subscriber.SubscribeUpdateStatusForUser(ctx, userId)
@@ -56,10 +56,10 @@ func (h *WSHandler) Connect(c *gin.Context) {
 
 	go client.WriteLoop()
 
-	// ReadLoop block cho đến khi client disconnect
+	// ReadLoop blocks until client disconnects
 	client.ReadLoop()
 
-	// Client đã disconnect → cancel subscriber
+	// Client disconnected → cancel subscriber goroutines
 	cancel()
 
 	h.hub.RemoveClient(client, userId)

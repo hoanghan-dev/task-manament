@@ -3,6 +3,7 @@ package workspace
 import (
 	"dev/task-management/internal/modules/workspace/dto"
 	services "dev/task-management/internal/modules/workspace/services"
+	"dev/task-management/pkg/apperror"
 	"dev/task-management/pkg/response"
 	"dev/task-management/pkg/utils"
 	"net/http"
@@ -23,79 +24,67 @@ func NewWorkspaceHandler(service services.WorkspaceService) *WorkspaceHandler {
 
 func (h *WorkspaceHandler) GetWorkspace(c *gin.Context) {
 	ownerId, err := utils.GetOwnerId(c)
-
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, response.ResponseError("Internal Server Error", err.Error()))
+		apperror.HandleError(c, err) // 401 Unauthorized
 		return
 	}
 
 	wp, err := h.service.GetWorkspace(c.Request.Context(), ownerId)
-
 	if err != nil {
-		c.JSON(http.StatusNotFound, response.ResponseError("Get workspace failed", err.Error()))
+		apperror.HandleError(c, err) // 404 NotFound / 500 Internal
 		return
 	}
 
-	c.JSON(http.StatusOK, response.ResponseSuccess("Get workspace successfully", wp))
+	c.JSON(http.StatusOK, response.ResponseSuccess("get workspace successfully", wp))
 }
 
 func (h *WorkspaceHandler) UpdateWorkspace(c *gin.Context) {
-
 	var wpReq dto.WorkspaceUpdateResquestDTO
 
-	err := c.ShouldBindJSON(&wpReq)
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, response.ResponseError("validation faild", err.Error()))
+	if err := c.ShouldBindJSON(&wpReq); err != nil {
+		apperror.HandleError(c, apperror.NewValidation(err.Error()))
 		return
 	}
 
 	ownerId, err := utils.GetOwnerId(c)
-
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, response.ResponseError("Internal Server Error", err.Error()))
+		apperror.HandleError(c, err) // 401 Unauthorized
 		return
 	}
 
-	updateErr := h.service.UpdateWorkspace(c.Request.Context(), &wpReq, ownerId)
-
-	if updateErr != nil {
-		c.JSON(http.StatusInternalServerError, response.ResponseError("Internal Server Error", updateErr.Error()))
+	if err := h.service.UpdateWorkspace(c.Request.Context(), &wpReq, ownerId); err != nil {
+		apperror.HandleError(c, err) // 404 NotFound / 500 Internal
 		return
 	}
 
-	c.JSON(http.StatusOK, response.ResponseSuccess("Update workspace successfully", nil))
+	c.JSON(http.StatusOK, response.ResponseSuccess("update workspace successfully", nil))
 }
 
 func (h *WorkspaceHandler) DeleteWorkspace(c *gin.Context) {
-
 	wpIdStr := c.Param("wpId")
 
 	if wpIdStr == "" {
-		c.JSON(http.StatusBadRequest, response.ResponseError("validation faild", "workspace id is required"))
+		apperror.HandleError(c, apperror.NewValidation("workspace id is required"))
 		return
 	}
 
 	wpId, err := uuid.Parse(wpIdStr)
-
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, response.ResponseError("Internal Server Error",
-			"invalid user_id format in context"))
+		// was incorrectly returning 500 — this is clearly a 400 validation error
+		apperror.HandleError(c, apperror.NewValidation("invalid workspace id format"))
 		return
 	}
 
 	ownerId, err := utils.GetOwnerId(c)
-
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, response.ResponseError("Internal Server Error", err.Error()))
+		apperror.HandleError(c, err) // 401 Unauthorized
 		return
 	}
 
-	deleteErr := h.service.DeteleWorkspace(c.Request.Context(), wpId, ownerId)
-
-	if deleteErr != nil {
-		c.JSON(http.StatusNotFound, response.ResponseError("Workspace not found", deleteErr.Error()))
+	if err := h.service.DeteleWorkspace(c.Request.Context(), wpId, ownerId); err != nil {
+		apperror.HandleError(c, err) // 404 NotFound / 500 Internal
 		return
 	}
-	c.JSON(http.StatusOK, response.ResponseSuccess("Delete workspace successfully", nil))
+
+	c.JSON(http.StatusOK, response.ResponseSuccess("delete workspace successfully", nil))
 }
