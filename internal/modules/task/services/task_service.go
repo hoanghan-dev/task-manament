@@ -7,9 +7,7 @@ import (
 	"dev/task-management/internal/modules/task/events"
 	"dev/task-management/internal/modules/task/mapper"
 	"dev/task-management/internal/modules/task/repositories"
-	workspaceService "dev/task-management/internal/modules/workspace/services"
 	"dev/task-management/pkg/apperror"
-	"dev/task-management/pkg/cache"
 	"fmt"
 	"time"
 
@@ -26,15 +24,28 @@ type TaskService interface {
 	UpdateTaskStatus(ctx context.Context, taskId uuid.UUID, ownerId uuid.UUID, taskReq *request.UpdateTaskStatusRequest) error
 }
 
-type taskService struct {
-	taskRepository   repositories.TaskRepository
-	workspaceService workspaceService.WorkspaceService
-	redisClient      *cache.RedisCacheService
+type WorkspaceOwnershipService interface {
+	IsWorkspaceOwnedBy(ctx context.Context, workspaceId uuid.UUID, ownerId uuid.UUID) (bool, error)
 }
 
-func NewTaskService(repo repositories.TaskRepository,
-	workspaceService workspaceService.WorkspaceService,
-	client *cache.RedisCacheService) TaskService {
+type CacheClient interface {
+	Get(key string, dest any) error
+	Set(key string, value any, ttl time.Duration) error
+	Clear(pattern string) error
+	Push(ctx context.Context, key string, value any) error
+}
+
+type taskService struct {
+	taskRepository   repositories.TaskRepository
+	workspaceService WorkspaceOwnershipService
+	redisClient      CacheClient
+}
+
+func NewTaskService(
+	repo repositories.TaskRepository,
+	workspaceService WorkspaceOwnershipService,
+	client CacheClient,
+) TaskService {
 	return &taskService{
 		taskRepository:   repo,
 		workspaceService: workspaceService,
@@ -132,6 +143,10 @@ func (s *taskService) CreateTask(ctx context.Context, t *request.CreateTaskReque
 
 	if createErr != nil {
 		return nil, createErr // AppError from repository
+	}
+
+	if task.Assignee != uuid.Nil {
+		go s.notifyAssignTask(ownerId, t.Assignee, task.Id)
 	}
 
 	errRedis := s.redisClient.Clear("tasks:*")
@@ -232,7 +247,7 @@ func (s *taskService) UpdateTaskStatus(ctx context.Context, taskId uuid.UUID, ow
 		return err // AppError from repository (NotFound or Internal)
 	}
 
-	ownered, err := s.workspaceService.IsWorkspaceOwnedBy(ctx, taskReq.WorkspaceId, ownerId)
+	ownered, err := s.taskRepository.CanUserAccessTask(ctx, taskId, ownerId)
 
 	if err != nil {
 		return err // AppError from workspace service
@@ -252,7 +267,7 @@ func (s *taskService) UpdateTaskStatus(ctx context.Context, taskId uuid.UUID, ow
 		return err // AppError from repository
 	}
 
-	s.notifyUpdateTaskStatus(taskId, ownerId)
+	go s.notifyUpdateTaskStatus(taskId, ownerId)
 
 	errRedis := s.redisClient.Clear("tasks:*")
 
