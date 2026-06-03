@@ -19,6 +19,7 @@ type TaskRepository interface {
 	AssignTask(ctx context.Context, taskId uuid.UUID, assigneeId uuid.UUID) error
 	UpdateTaskStatus(ctx context.Context, taskId uuid.UUID, status string) error
 	TaskExistsInWorkspace(ctx context.Context, taskId uuid.UUID, workspaceId uuid.UUID) bool
+	CanUserAccessTask(ctx context.Context, taskId uuid.UUID, userId uuid.UUID) (bool, error)
 }
 
 type taskRepository struct {
@@ -237,4 +238,22 @@ func (r *taskRepository) UpdateTaskStatus(ctx context.Context, taskId uuid.UUID,
 		return apperror.NewNotFound("task")
 	}
 	return nil
+}
+
+// CanUserAccessTask checks if the user is the workspace owner or the task assignee
+func (r *taskRepository) CanUserAccessTask(ctx context.Context, taskId uuid.UUID, userId uuid.UUID) (bool, error) {
+	sqlQuery := `SELECT EXISTS (
+		SELECT 1 FROM tasks t
+		JOIN workspaces w ON t.workspace_id = w.workspace_id
+		WHERE t.task_id = $1
+		AND (w.owner_id = $2 OR t.assignee_id = $3)
+	)`
+
+	var canAccess bool
+	err := r.database.QueryRowContext(ctx, sqlQuery, taskId, userId, userId).Scan(&canAccess)
+	if err != nil {
+		return false, apperror.WrapDBError(err, "task")
+	}
+
+	return canAccess, nil
 }

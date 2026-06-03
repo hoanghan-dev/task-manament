@@ -10,7 +10,6 @@ import (
 	"dev/task-management/internal/modules/comment/repositories"
 	"dev/task-management/internal/realtime"
 	"dev/task-management/pkg/apperror"
-	"dev/task-management/pkg/cache"
 	"fmt"
 	"strings"
 	"time"
@@ -24,12 +23,16 @@ type CommentService interface {
 	DeleteComment(ctx context.Context, commentId uuid.UUID, userId uuid.UUID) error
 }
 
-type commentService struct {
-	commentRepo repositories.CommentRepository
-	redisClient *cache.RedisCacheService
+type CommentPublisher interface {
+	Publish(ctx context.Context, channel string, value any) error
 }
 
-func NewCommentService(repo repositories.CommentRepository, redisClient *cache.RedisCacheService) CommentService {
+type commentService struct {
+	commentRepo repositories.CommentRepository
+	redisClient CommentPublisher
+}
+
+func NewCommentService(repo repositories.CommentRepository, redisClient CommentPublisher) CommentService {
 	return &commentService{
 		commentRepo: repo,
 		redisClient: redisClient,
