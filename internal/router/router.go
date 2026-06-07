@@ -4,6 +4,7 @@ import (
 	"dev/task-management/internal/middleware"
 	authHandler "dev/task-management/internal/modules/auth/handler"
 	commentHandler "dev/task-management/internal/modules/comment/handler"
+	healthHandler "dev/task-management/internal/modules/health/handler"
 	taskHandler "dev/task-management/internal/modules/task/handler"
 	workspaceHandler "dev/task-management/internal/modules/workspace/handler"
 	"dev/task-management/internal/realtime"
@@ -17,6 +18,7 @@ type RouterDependencies struct {
 	WorkspaceHandler *workspaceHandler.WorkspaceHandler
 	CommentHandler   *commentHandler.CommentHandler
 	WSHandler        *realtime.WSHandler
+	HealthHandler    *healthHandler.HealthHandler
 }
 
 func SetupRouter(deps RouterDependencies) *gin.Engine {
@@ -28,6 +30,7 @@ func SetupRouter(deps RouterDependencies) *gin.Engine {
 
 	api := r.Group("api/")
 	SetupAuthRouter(api, deps.AuthHander)
+	SetupHealthRouter(api, deps.HealthHandler)
 
 	protected := api.Group("", middleware.AuthMiddleware)
 	SetupTaskRouter(protected, deps.TaskHandler)
@@ -85,5 +88,12 @@ func SetupWSRouter(api *gin.RouterGroup, wsHandler *realtime.WSHandler) {
 	ws := api.Group("ws/")
 	{
 		ws.GET("/", wsHandler.Connect)
+	}
+}
+
+func SetupHealthRouter(api *gin.RouterGroup, HealthHandler *healthHandler.HealthHandler) {
+	health := api.Group("health/")
+	{
+		health.GET("/", HealthHandler.HealthCheck)
 	}
 }

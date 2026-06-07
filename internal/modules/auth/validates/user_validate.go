@@ -5,6 +5,7 @@ import (
 	"dev/task-management/internal/modules/auth/repositories"
 	"dev/task-management/pkg/apperror"
 	"errors"
+	"log"
 )
 
 var (
@@ -34,6 +35,7 @@ func EmailIsValid(email string, ctx context.Context, repo repositories.UserRepos
 			return nil
 		}
 		// Real DB error → propagate as internal error
+		log.Println("Check email: ", err)
 		return apperror.Wrap(err, apperror.NewInternal("failed to check email availability"))
 	}
 

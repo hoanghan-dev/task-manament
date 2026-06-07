@@ -8,6 +8,7 @@ import (
 	commentHandler "dev/task-management/internal/modules/comment/handler"
 	commentRepo "dev/task-management/internal/modules/comment/repositories"
 	commentService "dev/task-management/internal/modules/comment/services"
+	healthHandler "dev/task-management/internal/modules/health/handler"
 	taskHandler "dev/task-management/internal/modules/task/handler"
 	taskRepo "dev/task-management/internal/modules/task/repositories"
 	taskService "dev/task-management/internal/modules/task/services"
@@ -52,12 +53,15 @@ func NewApp(database *sql.DB, redis *redis.Client) *App {
 	commentService := commentService.NewCommentService(commentRepo, redisService)
 	commentHandler := commentHandler.NewCommentHandler(commentService)
 
+	healthHandler := healthHandler.NewHealthHandler(redis, database)
+
 	r := router.SetupRouter(router.RouterDependencies{
 		TaskHandler:      taskHandler,
 		AuthHander:       authHander,
 		WorkspaceHandler: workspaceHandler,
 		CommentHandler:   commentHandler,
 		WSHandler:        wsHandler,
+		HealthHandler:    healthHandler,
 	})
 
 	return &App{
