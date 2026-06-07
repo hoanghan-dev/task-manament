@@ -2,14 +2,15 @@ package services
 
 import (
 	"context"
+	"errors"
 	"dev/task-management/internal/modules/auth/dto/request"
 	"dev/task-management/internal/modules/auth/dto/response"
 	"dev/task-management/internal/modules/auth/mapper"
 	"dev/task-management/internal/modules/auth/repositories"
 	"dev/task-management/internal/modules/auth/validates"
 	wpService "dev/task-management/internal/modules/workspace/services"
+	"dev/task-management/pkg/apperror"
 	"dev/task-management/pkg/utils"
-	"errors"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -34,23 +35,20 @@ func NewAuthService(repo repositories.UserRepository, wpService wpService.Worksp
 
 func (s *authService) Register(ctx context.Context, userDTO *request.RegisterUserRequestDTO) (*response.UserResponseDTO, error) {
 
-	emailValid, err := validates.EmailIsValid(userDTO.Email, ctx, s.userRepo)
-
-	if !emailValid {
-		return nil, err
+	if err := validates.EmailIsValid(userDTO.Email, ctx, s.userRepo); err != nil {
+		return nil, err // AppError: Conflict (409) or Internal (500)
 	}
 
-	passValid, err := validates.PasswordIsValid(userDTO.Password)
-
-	if !passValid {
-		return nil, err
+	if err := validates.PasswordIsValid(userDTO.Password); err != nil {
+		return nil, err // AppError: Validation (400)
 	}
+
 	user := mapper.RegisterUserRequestToEntity(userDTO)
 
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(userDTO.Password), 12)
 
 	if err != nil {
-		return nil, err
+		return nil, apperror.Wrap(err, apperror.NewInternal("failed to hash password"))
 	}
 
 	user.Password = string(passwordHash)
@@ -58,13 +56,13 @@ func (s *authService) Register(ctx context.Context, userDTO *request.RegisterUse
 	errCreate := s.userRepo.CreateUser(ctx, user)
 
 	if errCreate != nil {
-		return nil, errCreate
+		return nil, errCreate // AppError from repository (409 duplicate, 500 internal)
 	}
 
 	wpRes, err := s.wpService.CreateWorkspaceDefault(ctx, user.Id, user.FullName)
 
 	if err != nil {
-		return nil, err
+		return nil, err // AppError from workspace service
 	}
 	return mapper.EntityToUserResponse(user, wpRes), nil
 }
@@ -72,23 +70,29 @@ func (s *authService) Register(ctx context.Context, userDTO *request.RegisterUse
 func (s *authService) Login(ctx context.Context, userDTO *request.LoginUserRequestDTO) (*response.UserAuthResponseDTO, error) {
 	user, err := s.userRepo.GetUserByEmail(ctx, userDTO.Email)
 	if err != nil {
-		return nil, err
+		// If user not found → return generic auth error (don't reveal email existence)
+		var appErr *apperror.AppError
+		if errors.As(err, &appErr) && appErr.Code == apperror.CodeNotFound {
+			return nil, apperror.NewUnauthorized("email or password invalid")
+		}
+		// Real DB error → internal
+		return nil, apperror.Wrap(err, apperror.NewInternal("authentication failed"))
 	}
 
 	if user == nil {
-		return nil, errors.New("User not found")
+		return nil, apperror.NewUnauthorized("email or password invalid")
 	}
 
 	errPass := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(userDTO.Password))
 
 	if errPass != nil {
-		return nil, errors.New("email or password invalid")
+		return nil, apperror.NewUnauthorized("email or password invalid")
 	}
 
 	token, err := utils.GenerateAccessToken(user.Id, user.Email)
 
 	if err != nil {
-		return nil, err
+		return nil, apperror.Wrap(err, apperror.NewInternal("failed to generate access token"))
 	}
 
 	return &response.UserAuthResponseDTO{

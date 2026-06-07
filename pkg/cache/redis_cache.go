@@ -24,7 +24,7 @@ func (rs *RedisCacheService) Set(key string, value any, ttl time.Duration) error
 	data, err := json.Marshal(value)
 
 	if err != nil {
-		return nil
+		return err
 	}
 	return rs.redisClient.Set(rs.ctx, key, data, ttl*time.Minute).Err()
 }
@@ -65,4 +65,39 @@ func (rs *RedisCacheService) Clear(pattern string) error {
 		}
 	}
 	return nil
+}
+
+func (rs *RedisCacheService) Push(ctx context.Context, queueKey string, value any) error {
+
+	data, err := json.Marshal(value)
+
+	if err != nil {
+		return err
+	}
+
+	return rs.redisClient.LPush(ctx, queueKey, data).Err()
+}
+
+func (rs *RedisCacheService) Pop(ctx context.Context, queueKey string, value any) error {
+	data, err := rs.redisClient.BRPop(ctx, 0, queueKey).Result()
+
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal([]byte(data[1]), value)
+}
+
+// Publish gửi message lên một Redis Pub/Sub channel
+func (rs *RedisCacheService) Publish(ctx context.Context, channel string, value any) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return rs.redisClient.Publish(ctx, channel, data).Err()
+}
+
+// Subscribe lắng nghe message từ một Redis Pub/Sub channel
+func (rs *RedisCacheService) Subscribe(ctx context.Context, channel string) *redis.PubSub {
+	return rs.redisClient.Subscribe(ctx, channel)
 }

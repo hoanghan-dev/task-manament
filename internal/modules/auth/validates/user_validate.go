@@ -3,7 +3,9 @@ package validates
 import (
 	"context"
 	"dev/task-management/internal/modules/auth/repositories"
+	"dev/task-management/pkg/apperror"
 	"errors"
+	"log"
 )
 
 var (
@@ -11,25 +13,36 @@ var (
 	MAX int = 20
 )
 
-func PasswordIsValid(pass string) (bool, error) {
+func PasswordIsValid(pass string) error {
 	if pass == "" {
-		return false, errors.New("password must be not null.")
+		return apperror.NewValidation("password must be not null")
 	}
 
 	if len(pass) < MIN || len(pass) > MAX {
-		return false, errors.New("password must be between 6 and 20 characters long.")
+		return apperror.NewValidation("password must be between 6 and 20 characters long")
 	}
 
-	return true, nil
+	return nil
 }
 
-func EmailIsValid(email string, ctx context.Context, repo repositories.UserRepository) (bool, error) {
-	user, _ := repo.GetUserByEmail(ctx, email)
+func EmailIsValid(email string, ctx context.Context, repo repositories.UserRepository) error {
+	user, err := repo.GetUserByEmail(ctx, email)
 
-	if user != nil {
-		return false, errors.New("Email already exists")
+	if err != nil {
+		// If user is not found, that means the email is available → valid
+		var appErr *apperror.AppError
+		if errors.As(err, &appErr) && appErr.Code == apperror.CodeNotFound {
+			return nil
+		}
+		// Real DB error → propagate as internal error
+		log.Println("Check email: ", err)
+		return apperror.Wrap(err, apperror.NewInternal("failed to check email availability"))
 	}
 
-	return true, nil
+	// User found → email already taken
+	if user != nil {
+		return apperror.NewConflict("email already exists")
+	}
 
+	return nil
 }

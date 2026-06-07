@@ -20,7 +20,7 @@ func main() {
 	redis, err := config.NewRedisClient()
 
 	if err != nil {
-		log.Printf("Connet redis faild: %v \n", err)
+		log.Fatalf("Connet redis faild: %v \n", err)
 	}
 
 	defer redis.Close()

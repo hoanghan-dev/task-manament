@@ -21,7 +21,7 @@ func NewRedisClient() (*redis.Client, error) {
 	db, err := strconv.Atoi(os.Getenv("REDIS_DB"))
 
 	if err != nil {
-		return nil, fmt.Errorf("Connect redis failed with error: %v", err)
+		return nil, fmt.Errorf("connect redis failed with error: %v", err)
 	}
 
 	cfg := &RedisClientConfig{

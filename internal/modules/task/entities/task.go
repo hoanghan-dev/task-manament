@@ -16,7 +16,7 @@ type Task struct {
 	CreateAt    time.Time
 }
 
-func  NewTask(id uuid.UUID, title string, description string, status string, assignee uuid.UUID, workspace uuid.UUID, createAt time.Time) *Task {
+func NewTask(id uuid.UUID, title string, description string, status string, assignee uuid.UUID, workspace uuid.UUID, createAt time.Time) *Task {
 	return &Task{
 		Id:          id,
 		Title:       title,

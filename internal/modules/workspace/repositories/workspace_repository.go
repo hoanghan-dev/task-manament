@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	entities "dev/task-management/internal/modules/workspace/entities"
-	"errors"
+	"dev/task-management/pkg/apperror"
 
 	"github.com/google/uuid"
 )
@@ -31,13 +31,11 @@ func (r *workspaceRepository) FindByOwnerId(ctx context.Context, ownerId uuid.UU
 	sqlQuery := `select workspace_id, name, description, owner_id, create_at from workspaces
 			where owner_id = $1`
 
+	// QueryContext (multi-row) never returns sql.ErrNoRows, so we check rows.Next() instead.
 	rows, err := r.db.QueryContext(ctx, sqlQuery, ownerId)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, errors.New("workspace not found")
-		}
-		return nil, err
+		return nil, apperror.WrapDBError(err, "workspace")
 	}
 
 	defer rows.Close()
@@ -54,52 +52,81 @@ func (r *workspaceRepository) FindByOwnerId(ctx context.Context, ownerId uuid.UU
 		)
 
 		if err != nil {
-			return nil, err
+			return nil, apperror.WrapDBError(err, "workspace")
 		}
+	} else {
+		// No rows found → workspace not found for this owner
+		return nil, apperror.NewNotFound("workspace")
 	}
 
-	return &wp, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, apperror.WrapDBError(err, "workspace")
+	}
+
+	return &wp, nil
 }
+
 func (r *workspaceRepository) Create(ctx context.Context, wp *entities.Workspace) (*entities.Workspace, error) {
-	sql := `insert into workspaces (workspace_id,name,description,owner_id,create_at)
+	sqlStr := `insert into workspaces (workspace_id,name,description,owner_id,create_at)
 			values ($1, $2, $3, $4, $5)`
-	_, err := r.db.ExecContext(ctx, sql, wp.WorkspaceId, wp.Name, wp.Description, wp.OwnerId, wp.CreateAt)
+	_, err := r.db.ExecContext(ctx, sqlStr, wp.WorkspaceId, wp.Name, wp.Description, wp.OwnerId, wp.CreateAt)
 
 	if err != nil {
-		return nil, err
+		return nil, apperror.WrapDBError(err, "workspace")
 	}
 
 	return wp, nil
 }
+
 func (r *workspaceRepository) Update(ctx context.Context, wp *entities.Workspace, wpId uuid.UUID, ownerId uuid.UUID) error {
-	sql := `update workspaces 
+	sqlStr := `update workspaces 
 			set name = $1, description = $2
 			where workspace_id = $3 and owner_id = $4`
-	_, err := r.db.ExecContext(ctx, sql, wp.Name, wp.Description, wpId, ownerId)
+	result, err := r.db.ExecContext(ctx, sqlStr, wp.Name, wp.Description, wpId, ownerId)
 	if err != nil {
-		return err
+		return apperror.WrapDBError(err, "workspace")
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return apperror.Wrap(err, apperror.NewInternal("database error"))
+	}
+	if rowsAffected == 0 {
+		return apperror.NewNotFound("workspace")
 	}
 	return nil
 }
+
 func (r *workspaceRepository) Delete(ctx context.Context, wpId uuid.UUID, ownerId uuid.UUID) error {
-	sql := `delete from workspaces where workspace_id = $1 and owner_id = $2`
+	sqlStr := `delete from workspaces where workspace_id = $1 and owner_id = $2`
 
-	_, err := r.db.ExecContext(ctx, sql, wpId, ownerId)
+	result, err := r.db.ExecContext(ctx, sqlStr, wpId, ownerId)
 
-	return err
+	if err != nil {
+		return apperror.WrapDBError(err, "workspace")
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return apperror.Wrap(err, apperror.NewInternal("database error"))
+	}
+	if rowsAffected == 0 {
+		return apperror.NewNotFound("workspace")
+	}
+	return nil
 }
 
 func (r *workspaceRepository) IsWorkspaceOwnedBy(ctx context.Context, wpId uuid.UUID, ownerId uuid.UUID) (bool, error) {
-	sql := `select exists (
+	sqlStr := `select exists (
 		select 1 from workspaces where workspace_id = $1 and owner_id = $2
 	)`
 
 	var ownered bool
 
-	err := r.db.QueryRowContext(ctx, sql, wpId, ownerId).Scan(&ownered)
+	err := r.db.QueryRowContext(ctx, sqlStr, wpId, ownerId).Scan(&ownered)
 
 	if err != nil {
-		return false, err
+		return false, apperror.WrapDBError(err, "workspace")
 	}
 
 	return ownered, nil
