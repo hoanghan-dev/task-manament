@@ -342,3 +342,7 @@
 [INFO] RequestID: bb66add6-dc3a-488a-a3c1-2b0eeff15b73 - Method: PATCH - Path: /api/tasks/assign - Status: 401 - latency: 0s 
 [INFO] RequestID: 457d58aa-1862-4f26-8006-5bf8b37e8148 - Method: PATCH - Path: /api/tasks/assign - Status: 200 - latency: 25.4875ms 
 [INFO] RequestID: 8e6e5f4a-3c33-4232-bea3-3a2e001137ea - Method: GET - Path: /api/ws/ - Status: 200 - latency: 13m52.8516996s 
+[INFO] RequestID: d73968a8-8d8f-41da-8bfc-5d1d88377eeb - Method: POST - Path: /api/auth/login - Status: 500 - latency: 290.1753ms 
+[INFO] RequestID: 6809132b-ef3c-4e60-b84c-f98ac6352543 - Method: POST - Path: /api/auth/login - Status: 500 - latency: 88.2653ms 
+[INFO] RequestID: ed8a0eb6-8971-4ee6-accc-18a996a01102 - Method: POST - Path: /api/auth/register - Status: 400 - latency: 0s 
+[INFO] RequestID: 019812ed-596e-478d-ad7c-744f2fd45d87 - Method: POST - Path: /api/auth/register - Status: 500 - latency: 214.2849ms 
