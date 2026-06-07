@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -203,13 +202,4 @@ func createTaskForUser(t *testing.T, user permissionTestUser) uuid.UUID {
 	require.NotEmpty(t, data.TaskID)
 
 	return uuid.MustParse(data.TaskID)
-}
-
-func mustJSON(t *testing.T, v any) []byte {
-	t.Helper()
-
-	b, err := json.Marshal(v)
-	require.NoError(t, err)
-
-	return b
 }
