@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"dev/task-management/pkg/apperror"
 	"errors"
 	"fmt"
 	"os"
@@ -16,13 +17,13 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func GenerateAccessToken(userId uuid.UUID, email string) (string, error) {
+func GenerateAccessToken(userId uuid.UUID, email string, tll time.Duration) (string, error) {
 	claim := &Claims{
 		UserId: userId,
 		Email:  email,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(60 * time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tll)),
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claim)
@@ -49,4 +50,16 @@ func VerifyAccessToken(tokenString string) (jwt.MapClaims, error) {
 	}
 
 	return claims, nil
+}
+
+func GetUserId(token string) (uuid.UUID, error) {
+	claims, err := VerifyAccessToken(token)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	userIdStr, ok := claims["user_id"].(string)
+	if !ok {
+		return uuid.Nil, apperror.NewUnauthorized("invalid token payload")
+	}
+	return uuid.MustParse(userIdStr), nil
 }

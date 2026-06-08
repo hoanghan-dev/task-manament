@@ -59,6 +59,9 @@ func SetupAuthRouter(api *gin.RouterGroup, authHander *authHandler.AuthHander) {
 	{
 		auth.POST("/register", authHander.Register)
 		auth.POST("/login", authHander.Login)
+		auth.POST("/refresh", authHander.RefreshToken)
+		auth.GET("/logout", authHander.Logout)
+
 	}
 }
 

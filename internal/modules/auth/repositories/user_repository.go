@@ -13,6 +13,7 @@ type UserRepository interface {
 	GetUserByEmail(ctx context.Context, email string) (*entities.User, error)
 	CreateUser(ctx context.Context, user *entities.User) error
 	UserIsExists(ctx context.Context, userId uuid.UUID) bool
+	GetUserById(ctx context.Context, id uuid.UUID) (*entities.User, error)
 }
 
 type userRepository struct {
@@ -74,4 +75,27 @@ func (r *userRepository) UserIsExists(ctx context.Context, userId uuid.UUID) boo
 	}
 
 	return exists
+}
+
+func (r *userRepository) GetUserById(ctx context.Context, id uuid.UUID) (*entities.User, error) {
+	query := `select user_id, email, password_hash, full_name, create_at
+			from users where user_id = $1`
+
+	row := r.database.QueryRowContext(ctx, query, id)
+
+	var user entities.User
+
+	err := row.Scan(
+		&user.Id,
+		&user.Email,
+		&user.Password,
+		&user.FullName,
+		&user.CreateAt,
+	)
+
+	if err != nil {
+		return nil, apperror.WrapDBError(err, "user")
+	}
+
+	return &user, nil
 }

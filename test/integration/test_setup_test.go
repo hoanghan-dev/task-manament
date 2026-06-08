@@ -44,8 +44,8 @@ var testRouter *gin.Engine
 func TestMain(m *testing.M) {
 	// Load .env.test if present (for local development).
 	// Try multiple paths since CWD can vary depending on how tests are invoked.
-	_ = godotenv.Load(".env.test")                   // if CWD is test/integration/
-	_ = godotenv.Load("test/integration/.env.test")  // if CWD is project root
+	_ = godotenv.Load(".env.test")                  // if CWD is test/integration/
+	_ = godotenv.Load("test/integration/.env.test") // if CWD is project root
 
 	// Setup
 	var err error
@@ -153,7 +153,7 @@ func setupRouter(db *sql.DB, redisClient *redis.Client) *gin.Engine {
 	tHandler := taskHandler.NewTaskHandler(tService)
 
 	uRepo := userRepo.NewUserRepository(db)
-	aService := authService.NewAuthService(uRepo, wpService)
+	aService := authService.NewAuthService(uRepo, wpService, redisService)
 	aHandler := authHandler.NewAuthHandler(aService)
 
 	cRepo := commentRepo.NewCommentRepository(db)
