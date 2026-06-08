@@ -46,7 +46,7 @@ func NewApp(database *sql.DB, redis *redis.Client) *App {
 	taskHandler := taskHandler.NewTaskHandler(taskService)
 
 	userRepo := userRepo.NewUserRepository(database)
-	authService := authService.NewAuthService(userRepo, workspaceService)
+	authService := authService.NewAuthService(userRepo, workspaceService, redisService)
 	authHander := authHander.NewAuthHandler(authService)
 
 	commentRepo := commentRepo.NewCommentRepository(database)
