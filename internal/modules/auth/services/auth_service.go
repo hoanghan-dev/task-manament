@@ -112,7 +112,7 @@ func (s *authService) Login(ctx context.Context, userDTO *request.LoginUserReque
 		return nil, apperror.Wrap(err, apperror.NewInternal("failed to generate refresh token"))
 	}
 
-	authKey := "auth:refresh_token:user_id" + refreshToken
+	authKey := "auth:refresh_token:user_id:" + user.Id.String()
 	err = s.redis.Set(authKey, refreshToken, 7*24*time.Hour)
 
 	if err != nil {
@@ -148,7 +148,7 @@ func (s *authService) RefreshToken(ctx context.Context, token string) (*response
 		return nil, apperror.NewUnauthorized("email or password invalid")
 	}
 
-	authKey := "auth:refresh_token:user_id" + userId.String()
+	authKey := "auth:refresh_token:user_id:" + userId.String()
 	var refreshToken string
 	redisErr := s.redis.Get(authKey, &refreshToken)
 

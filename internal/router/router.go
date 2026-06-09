@@ -60,9 +60,9 @@ func SetupAuthRouter(api *gin.RouterGroup, authHander *authHandler.AuthHander) {
 		auth.POST("/register", authHander.Register)
 		auth.POST("/login", authHander.Login)
 		auth.POST("/refresh", authHander.RefreshToken)
-		auth.GET("/logout", authHander.Logout)
-
 	}
+	auth.Group("", middleware.AuthMiddleware).GET("/logout", authHander.Logout)
+
 }
 
 func SetupWorkspaceRouter(api *gin.RouterGroup, workspaceHandler *workspaceHandler.WorkspaceHandler) {
