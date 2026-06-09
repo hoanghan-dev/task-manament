@@ -483,7 +483,7 @@ func TestRefreshToken_Success(t *testing.T) {
 	assert.True(t, repo.getUserByIdCalled)
 	assert.Equal(t, userId, repo.getUserByIdArg)
 
-	expectedKey := "auth:refresh_token:user_id" + userId.String()
+	expectedKey := "auth:refresh_token:user_id:" + userId.String()
 
 	assert.True(t, cache.getCalled)
 	assert.Equal(t, expectedKey, cache.gotGetKey)
